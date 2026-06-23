@@ -36,6 +36,25 @@ export default function OrderPage({
   const [error, setError] = useState('');
   const [placing, setPlacing] = useState(false);
   const [showCart, setShowCart] = useState(false);
+  const [isDark, setIsDark] = useState(true);
+
+  // Read saved theme on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('theme');
+    setIsDark(saved !== 'light');
+  }, []);
+
+  function toggleTheme() {
+    const newDark = !isDark;
+    setIsDark(newDark);
+    if (newDark) {
+      document.documentElement.removeAttribute('data-theme');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.setAttribute('data-theme', 'light');
+      localStorage.setItem('theme', 'light');
+    }
+  }
 
   const loadMenu = useCallback(async () => {
     try {
@@ -112,21 +131,36 @@ export default function OrderPage({
 
   return (
     <div className="order-page">
-      {/* Header */}
+      {/* Sticky Header */}
       <header className="order-header">
-        <div>
-          <div className="order-header-title">{restaurant?.restaurantName || 'Restaurant'}</div>
-          <div className="order-header-sub">Table {tableNumber} · Tap items to add to cart</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="order-header-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {restaurant?.restaurantName || 'Restaurant'}
+          </div>
+          <div className="order-header-sub">Table {tableNumber} · Tap to add</div>
         </div>
-        {cartCount > 0 && (
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+          {/* Theme Toggle */}
           <button
-            id="view-cart-btn"
-            className="btn btn-primary btn-sm"
-            onClick={() => setShowCart(true)}
+            className="btn btn-ghost btn-icon"
+            onClick={toggleTheme}
+            aria-label="Toggle theme"
+            style={{ fontSize: '1rem' }}
           >
-            🛒 {cartCount} item{cartCount !== 1 ? 's' : ''}
+            {isDark ? '☀️' : '🌙'}
           </button>
-        )}
+
+          {cartCount > 0 && (
+            <button
+              id="view-cart-btn"
+              className="btn btn-primary btn-sm"
+              onClick={() => setShowCart(true)}
+            >
+              🛒 {cartCount}
+            </button>
+          )}
+        </div>
       </header>
 
       {/* Menu */}
@@ -142,11 +176,13 @@ export default function OrderPage({
             const qty = cart.get(item.id)?.quantity || 0;
             return (
               <div key={item.id} className="order-item-card">
+                {/* Image */}
                 <div className="order-item-img">
                   {item.imageUrl
                     ? <img src={item.imageUrl} alt={item.name} />
                     : '🍴'}
                 </div>
+
                 <div className="order-item-body">
                   <div className="order-item-name">{item.name}</div>
                   {item.description && <div className="order-item-desc">{item.description}</div>}
@@ -156,7 +192,11 @@ export default function OrderPage({
                       <div className="order-item-prep">⏱ {item.preparationTime} min</div>
                     </div>
                     {qty === 0 ? (
-                      <button id={`add-${item.id}`} className="btn btn-primary btn-sm" onClick={() => addToCart(item)}>
+                      <button
+                        id={`add-${item.id}`}
+                        className="btn btn-primary btn-sm"
+                        onClick={() => addToCart(item)}
+                      >
                         + Add
                       </button>
                     ) : (
@@ -190,14 +230,14 @@ export default function OrderPage({
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowCart(false)}>
           <div className="modal-box" style={{ maxWidth: 440 }}>
             <div className="modal-header">
-              <h3 className="modal-title">Your Cart</h3>
+              <h3 className="modal-title">🛒 Your Cart</h3>
               <button className="btn btn-ghost btn-icon" onClick={() => setShowCart(false)}>✕</button>
             </div>
-            <div style={{ marginBottom: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ marginBottom: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '50vh', overflowY: 'auto' }}>
               {cartItems.map(c => (
-                <div key={c.menuItem.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{c.menuItem.name}</div>
+                <div key={c.menuItem.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.menuItem.name}</div>
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>₹{c.menuItem.price.toFixed(2)} each</div>
                   </div>
                   <div className="qty-control">
@@ -205,7 +245,7 @@ export default function OrderPage({
                     <span className="qty-value">{c.quantity}</span>
                     <button className="qty-btn" onClick={() => addToCart(c.menuItem)}>+</button>
                   </div>
-                  <div style={{ fontWeight: 700, minWidth: 60, textAlign: 'right' }}>
+                  <div style={{ fontWeight: 700, minWidth: 56, textAlign: 'right', fontSize: '0.9rem' }}>
                     ₹{(c.menuItem.price * c.quantity).toFixed(2)}
                   </div>
                 </div>
