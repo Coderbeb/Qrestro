@@ -1,0 +1,129 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  RESTAURANT_OWNER
+}
+
+enum PlanTier {
+  FREE
+  PRO
+  PREMIUM
+}
+
+model SubscriptionPlan {
+  id          String   @id @default(uuid()) @db.Uuid
+  tier        PlanTier @unique
+  price       Decimal  @db.Decimal(10, 2)
+  maxTables   Int      @map("max_tables")
+  features    String[]
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  owners      Owner[]
+
+  @@map("subscription_plans")
+}
+
+
+model Owner {
+  id             String     @id @default(uuid()) @db.Uuid
+  username       String     @unique @db.VarChar(255)
+  email          String     @unique @db.VarChar(255)
+  passwordHash   String     @map("password_hash") @db.VarChar(255)
+  restaurantName String?    @map("restaurant_name") @db.VarChar(255)
+  ownerName      String?    @map("owner_name") @db.VarChar(255)
+  phone          String?    @db.VarChar(50)
+  role           Role       @default(RESTAURANT_OWNER)
+  planId         String?    @map("plan_id") @db.Uuid
+  subscriptionStatus String @default("active") @map("subscription_status") @db.VarChar(50)
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  plan      SubscriptionPlan? @relation(fields: [planId], references: [id])
+  tables    Table[]
+  menuItems MenuItem[]
+  orders    Order[]
+
+  @@map("owners")
+}
+
+model Table {
+  id             String   @id @default(uuid()) @db.Uuid
+  ownerId        String   @map("owner_id") @db.Uuid
+  tableNumber    Int      @map("table_number")
+  qrCodeData     String   @map("qr_code_data") @db.Text
+  qrCodeImageUrl String?  @map("qr_code_image_url") @db.Text
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  owner Owner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, tableNumber])
+  @@index([tableNumber])
+  @@map("tables")
+}
+
+model MenuItem {
+  id              String   @id @default(uuid()) @db.Uuid
+  ownerId         String   @map("owner_id") @db.Uuid
+  name            String   @db.VarChar(255)
+  description     String?  @db.Text
+  price           Decimal  @db.Decimal(10, 2)
+  imageUrl        String?  @map("image_url") @db.Text
+  preparationTime Int      @default(15) @map("preparation_time")
+  isAvailable     Boolean  @default(true) @map("is_available")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  owner      Owner       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@index([isAvailable])
+  @@map("menu_items")
+}
+
+model Order {
+  id            String    @id @default(uuid()) @db.Uuid
+  ownerId       String    @map("owner_id") @db.Uuid
+  tableNumber   Int       @map("table_number")
+  totalAmount   Decimal   @map("total_amount") @db.Decimal(10, 2)
+  estimatedTime Int       @map("estimated_time")
+  status        String    @default("pending") @db.VarChar(50)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  completedAt   DateTime? @map("completed_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  owner Owner       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  items OrderItem[]
+
+  @@index([tableNumber])
+  @@index([status])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id           String   @id @default(uuid()) @db.Uuid
+  orderId      String   @map("order_id") @db.Uuid
+  menuItemId   String   @map("menu_item_id") @db.Uuid
+  menuItemName String   @map("menu_item_name") @db.VarChar(255)
+  quantity     Int
+  price        Decimal  @db.Decimal(10, 2)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([menuItemId])
+  @@map("order_items")
+}
