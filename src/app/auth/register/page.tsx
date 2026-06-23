@@ -62,8 +62,8 @@ export default function RegisterPage() {
         </div>
 
         <form className="auth-form" onSubmit={handleSubmit}>
-          {/* Row 1 */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+          {/* Row 1 — stacks to 1 column on mobile */}
+          <div className="form-row-2">
             <div className="form-group">
               <label className="form-label" htmlFor="restaurantName">Restaurant Name *</label>
               <input id="restaurantName" type="text" className="input-field" placeholder="The Spice Garden" value={form.restaurantName} onChange={set('restaurantName')} required />
@@ -74,7 +74,7 @@ export default function RegisterPage() {
             </div>
           </div>
           {/* Row 2 */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+          <div className="form-row-2">
             <div className="form-group">
               <label className="form-label" htmlFor="reg-email">Email *</label>
               <input id="reg-email" type="email" className="input-field" placeholder="raj@restaurant.com" value={form.email} onChange={set('email')} required />
@@ -85,7 +85,7 @@ export default function RegisterPage() {
             </div>
           </div>
           {/* Row 3 */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+          <div className="form-row-2">
             <div className="form-group">
               <label className="form-label" htmlFor="reg-username">Username *</label>
               <input id="reg-username" type="text" className="input-field" placeholder="raj_restaurant" value={form.username} onChange={set('username')} required minLength={3} />
