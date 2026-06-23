@@ -4,7 +4,6 @@ import { isRateLimited } from '@/lib/rateLimit';
 
 export async function GET(request: NextRequest) {
   try {
-    // Basic rate limit: 60 requests per minute
     if (isRateLimited(request, 60, 60000)) {
       return NextResponse.json(
         { success: false, error: { message: 'Too many requests. Please try again later.' } },
@@ -25,9 +24,17 @@ export async function GET(request: NextRequest) {
     });
     if (!owner) return NextResponse.json({ success: false, error: { code: 'NOT_FOUND', message: 'Restaurant not found' } }, { status: 404 });
 
+    // Fetch categories (sorted)
+    const categories = await prisma.menuCategory.findMany({
+      where: { ownerId },
+      orderBy: { sortOrder: 'asc' },
+      select: { id: true, name: true, sortOrder: true },
+    });
+
+    // Fetch all available items with category info
     const items = await prisma.menuItem.findMany({
       where: { ownerId, isAvailable: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ categoryId: 'asc' }, { createdAt: 'desc' }],
       select: {
         id: true,
         name: true,
@@ -36,6 +43,8 @@ export async function GET(request: NextRequest) {
         imageUrl: true,
         preparationTime: true,
         isAvailable: true,
+        categoryId: true,
+        category: { select: { id: true, name: true, sortOrder: true } },
       },
     });
 
@@ -44,11 +53,21 @@ export async function GET(request: NextRequest) {
       price: parseFloat(item.price.toString()),
     }));
 
+    // Group items by category
+    const categorized = categories.map(cat => ({
+      ...cat,
+      items: formatted.filter(i => i.categoryId === cat.id),
+    })).filter(cat => cat.items.length > 0);
+
+    const uncategorized = formatted.filter(i => !i.categoryId);
+
     return NextResponse.json({
       success: true,
       data: {
         restaurant: owner,
-        items: formatted,
+        items: formatted,          // flat list (for backward compat)
+        categories: categorized,   // grouped by category
+        uncategorized,             // items without a category
       },
     });
   } catch (error) {

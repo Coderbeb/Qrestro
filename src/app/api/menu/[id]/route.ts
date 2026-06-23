@@ -30,7 +30,7 @@ export async function PUT(
   const { id } = await params;
   try {
     const body = await request.json();
-    const { name, description, price, preparationTime, isAvailable, imageUrl } = body;
+    const { name, description, price, preparationTime, isAvailable, imageUrl, categoryId } = body;
 
     const existing = await prisma.menuItem.findFirst({ where: { id, ownerId: user.id } });
     if (!existing) return NextResponse.json({ success: false, error: { code: 'NOT_FOUND', message: 'Menu item not found' } }, { status: 404 });
@@ -48,7 +48,9 @@ export async function PUT(
         ...(preparationTime !== undefined && { preparationTime: parseInt(preparationTime) }),
         ...(isAvailable !== undefined && { isAvailable }),
         ...(imageUrl !== undefined && { imageUrl }),
+        ...(categoryId !== undefined && { categoryId: categoryId || null }),
       },
+      include: { category: { select: { id: true, name: true, sortOrder: true } } },
     });
     return NextResponse.json({ success: true, data: { ...updated, price: parseFloat(updated.price.toString()) } });
   } catch (error) {
