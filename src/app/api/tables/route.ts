@@ -14,10 +14,13 @@ export async function GET(request: NextRequest) {
     });
 
     // Auto-repair any tables with incorrect JSON formatting or missing QR code images
+    const requestHost = request.headers.get('host');
     for (const table of tables) {
       const isJson = table.qrCodeData && (table.qrCodeData.startsWith('{') || table.qrCodeData.startsWith('['));
-      if (!table.qrCodeData || isJson || !table.qrCodeImageUrl) {
-        const orderUrl = buildOrderUrl(user.id, table.tableNumber);
+      // Also repair if the stored URL points to localhost (leftover from local dev)
+      const isLocalhost = table.qrCodeData && table.qrCodeData.includes('localhost');
+      if (!table.qrCodeData || isJson || !table.qrCodeImageUrl || isLocalhost) {
+        const orderUrl = buildOrderUrl(user.id, table.tableNumber, requestHost);
         const qrCodeImageUrl = await generateQRCodeDataURL(orderUrl);
 
         await prisma.table.update({
@@ -78,7 +81,8 @@ export async function POST(request: NextRequest) {
       }, { status: 403 });
     }
 
-    const orderUrl = buildOrderUrl(user.id, tableNumber);
+    const requestHost = request.headers.get('host');
+    const orderUrl = buildOrderUrl(user.id, tableNumber, requestHost);
     const qrCodeImageUrl = await generateQRCodeDataURL(orderUrl);
 
     const table = await prisma.table.create({

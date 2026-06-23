@@ -15,6 +15,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
   const [owner, setOwner] = useState<{ restaurantName?: string; username?: string } | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isDark, setIsDark] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -22,7 +24,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const stored = localStorage.getItem('owner');
     // eslint-disable-next-line
     if (stored) setOwner(JSON.parse(stored));
+
+    // Restore theme from localStorage
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'light') {
+      setIsDark(false);
+      document.documentElement.setAttribute('data-theme', 'light');
+    } else {
+      setIsDark(true);
+      document.documentElement.removeAttribute('data-theme');
+    }
   }, [router]);
+
+  // Close sidebar on route change (mobile)
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [pathname]);
+
+  function toggleTheme() {
+    const newDark = !isDark;
+    setIsDark(newDark);
+    if (newDark) {
+      document.documentElement.removeAttribute('data-theme');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.setAttribute('data-theme', 'light');
+      localStorage.setItem('theme', 'light');
+    }
+  }
 
   function handleLogout() {
     localStorage.removeItem('token');
@@ -36,14 +65,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="dashboard-layout">
+      {/* Mobile overlay backdrop */}
+      {sidebarOpen && (
+        <div
+          className="sidebar-overlay"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="sidebar">
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-logo">
           <div className="sidebar-logo-icon">🍴</div>
           <div>
             <div className="sidebar-logo-name">{owner?.restaurantName || 'QRBite'}</div>
             <div className="sidebar-logo-sub">@{owner?.username || '...'}</div>
           </div>
+          {/* Close button for mobile */}
+          <button
+            className="sidebar-close-btn"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close sidebar"
+          >
+            ✕
+          </button>
         </div>
 
         <nav className="sidebar-nav">
@@ -71,10 +116,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main */}
       <div className="dashboard-main">
         <header className="dashboard-topbar">
-          <span className="topbar-title">
-            {NAV_ITEMS.find(n => n.id === active)?.label || 'Dashboard'}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            {/* Hamburger menu button — mobile only */}
+            <button
+              id="hamburger-btn"
+              className="hamburger-btn"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open sidebar"
+            >
+              <span />
+              <span />
+              <span />
+            </button>
+            <span className="topbar-title">
+              {NAV_ITEMS.find(n => n.id === active)?.label || 'Dashboard'}
+            </span>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {/* Dark / Light mode toggle */}
+            <button
+              id="theme-toggle-btn"
+              className="btn btn-ghost btn-icon"
+              onClick={toggleTheme}
+              aria-label="Toggle theme"
+              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              style={{ fontSize: '1.1rem' }}
+            >
+              {isDark ? '☀️' : '🌙'}
+            </button>
             <div style={{
               width: 32, height: 32,
               background: 'var(--accent-glow)',

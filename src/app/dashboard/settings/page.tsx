@@ -108,7 +108,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
+      <div className="settings-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.5rem' }}>
         {/* Profile Form */}
         <div className="card">
           <h3 style={{ marginBottom: '1.5rem' }}>🏪 Restaurant Profile</h3>

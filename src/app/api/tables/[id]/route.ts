@@ -40,7 +40,8 @@ export async function PUT(
     let qrCodeData = existing.qrCodeData;
 
     if (regenerateQR) {
-      const orderUrl = buildOrderUrl(user.id, existing.tableNumber);
+      const requestHost = request.headers.get('host');
+      const orderUrl = buildOrderUrl(user.id, existing.tableNumber, requestHost);
       qrCodeData = orderUrl;
       qrCodeImageUrl = await generateQRCodeDataURL(orderUrl);
     }
