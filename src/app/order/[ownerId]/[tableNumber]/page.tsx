@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback, useRef, use } from 'react';
 import { useRouter } from 'next/navigation';
+import { Sun, Moon, ShoppingBag, Utensils, Clock, X } from 'lucide-react';
 
 type MenuItem = { id: string; name: string; description: string | null; price: number; imageUrl: string | null; preparationTime: number; categoryId: string | null; };
 type Category = { id: string; name: string; sortOrder: number; items: MenuItem[]; };
@@ -21,19 +22,19 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
   const [placing, setPlacing] = useState(false);
   const [showCart, setShowCart] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('all');
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(false);
   const tabBarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('theme');
-    setIsDark(saved !== 'light');
+    setIsDark(saved === 'dark');
   }, []);
 
   function toggleTheme() {
     const newDark = !isDark;
     setIsDark(newDark);
-    if (newDark) { document.documentElement.removeAttribute('data-theme'); localStorage.setItem('theme', 'dark'); }
-    else { document.documentElement.setAttribute('data-theme', 'light'); localStorage.setItem('theme', 'light'); }
+    if (newDark) { document.documentElement.setAttribute('data-theme', 'dark'); localStorage.setItem('theme', 'dark'); }
+    else { document.documentElement.removeAttribute('data-theme'); localStorage.setItem('theme', 'light'); }
   }
 
   const loadMenu = useCallback(async () => {
@@ -97,8 +98,8 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
           <div className="order-header-sub">Table {tableNumber} · Tap to add</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
-          <button className="btn btn-ghost btn-icon" onClick={toggleTheme} aria-label="Toggle theme" style={{ fontSize: '1rem' }}>{isDark ? '☀️' : '🌙'}</button>
-          {cartCount > 0 && <button id="view-cart-btn" className="btn btn-primary btn-sm" onClick={() => setShowCart(true)}>🛒 {cartCount}</button>}
+          <button className="btn btn-ghost btn-icon" onClick={toggleTheme} aria-label="Toggle theme" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{isDark ? <Sun size={18} /> : <Moon size={18} />}</button>
+          {cartCount > 0 && <button id="view-cart-btn" className="btn btn-primary btn-sm" onClick={() => setShowCart(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><ShoppingBag size={14} /> {cartCount}</button>}
         </div>
       </header>
 
@@ -116,7 +117,9 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
       {/* Menu */}
       {displayItems.length === 0 ? (
         <div className="empty-state" style={{ minHeight: 'calc(100vh - 160px)' }}>
-          <div className="empty-state-icon">🍽️</div>
+          <div className="empty-state-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Utensils size={40} style={{ strokeWidth: 1.5 }} />
+          </div>
           <h3>Nothing here yet</h3>
           <p>No items available in this category.</p>
         </div>
@@ -126,14 +129,14 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
             const qty = cart.get(item.id)?.quantity || 0;
             return (
               <div key={item.id} className="order-item-card">
-                <div className="order-item-img">{item.imageUrl ? <img src={item.imageUrl} alt={item.name} /> : '🍴'}</div>
+                <div className="order-item-img" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.imageUrl ? <img src={item.imageUrl} alt={item.name} /> : <Utensils size={24} style={{ color: 'var(--text-muted)' }} />}</div>
                 <div className="order-item-body">
                   <div className="order-item-name">{item.name}</div>
                   {item.description && <div className="order-item-desc">{item.description}</div>}
                   <div className="order-item-footer">
                     <div>
                       <div className="order-item-price">₹{item.price.toFixed(2)}</div>
-                      <div className="order-item-prep">⏱ {item.preparationTime} min</div>
+                      <div className="order-item-prep" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}><Clock size={12} /> {item.preparationTime} min</div>
                     </div>
                     {qty === 0 ? (
                       <button id={`add-${item.id}`} className="btn btn-primary btn-sm" onClick={() => addToCart(item)}>+ Add</button>
@@ -164,7 +167,7 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
       {showCart && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowCart(false)}>
           <div className="modal-box" style={{ maxWidth: 440 }}>
-            <div className="modal-header"><h3 className="modal-title">🛒 Your Cart</h3><button className="btn btn-ghost btn-icon" onClick={() => setShowCart(false)}>✕</button></div>
+            <div className="modal-header"><h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><ShoppingBag size={20} /> Your Cart</h3><button className="btn btn-ghost btn-icon" onClick={() => setShowCart(false)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button></div>
             <div style={{ marginBottom: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '50vh', overflowY: 'auto' }}>
               {cartItems.map(c => (
                 <div key={c.menuItem.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -185,8 +188,8 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
               <span style={{ fontWeight: 700 }}>Total</span>
               <span style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--accent)' }}>₹{cartTotal.toFixed(2)}</span>
             </div>
-            <button id="place-order-btn" className="btn btn-primary btn-full btn-lg" onClick={placeOrder} disabled={placing}>
-              {placing ? <><span className="spinner" style={{ width: 18, height: 18 }} /> Placing Order…</> : '🛒 Place Order'}
+            <button id="place-order-btn" className="btn btn-primary btn-full btn-lg" onClick={placeOrder} disabled={placing} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+              {placing ? <><span className="spinner" style={{ width: 18, height: 18 }} /> Placing Order…</> : <><ShoppingBag size={18} /> Place Order</>}
             </button>
           </div>
         </div>

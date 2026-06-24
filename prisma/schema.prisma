@@ -44,6 +44,8 @@ model Owner {
   role           Role       @default(RESTAURANT_OWNER)
   planId         String?    @map("plan_id") @db.Uuid
   subscriptionStatus String @default("active") @map("subscription_status") @db.VarChar(50)
+  showOnLanding  Boolean    @default(false) @map("show_on_landing")
+  cuisine        String?    @db.VarChar(100)
   createdAt      DateTime   @default(now()) @map("created_at")
   updatedAt      DateTime   @updatedAt @map("updated_at")
 

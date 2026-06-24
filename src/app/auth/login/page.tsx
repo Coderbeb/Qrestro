@@ -1,6 +1,7 @@
 'use client';
 import { useState, FormEvent } from 'react';
 import Link from 'next/link';
+import { Utensils, Eye, EyeOff } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
@@ -8,6 +9,7 @@ export default function LoginPage() {
   const [form, setForm] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -41,7 +43,9 @@ export default function LoginPage() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-logo">
-          <div className="auth-logo-icon">🍴</div>
+          <div className="auth-logo-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Utensils size={24} style={{ color: 'var(--accent)' }} />
+          </div>
           <h1 className="auth-title">Welcome back</h1>
           <p className="auth-subtitle">Sign in to your restaurant dashboard</p>
         </div>
@@ -62,16 +66,40 @@ export default function LoginPage() {
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              className="input-field"
-              placeholder="••••••••"
-              value={form.password}
-              onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
-              required
-              autoComplete="current-password"
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                className="input-field"
+                style={{ paddingRight: '3rem' }}
+                placeholder="••••••••"
+                value={form.password}
+                onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+                required
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '1rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  padding: '0.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
           {error && <p className="form-error" style={{ textAlign: 'center' }}>{error}</p>}
           <button id="login-submit" type="submit" className="btn btn-primary btn-full" disabled={loading}>

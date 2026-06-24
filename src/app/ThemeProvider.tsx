@@ -8,8 +8,8 @@ import { useEffect } from 'react';
 export default function ThemeProvider() {
   useEffect(() => {
     const saved = localStorage.getItem('theme');
-    if (saved === 'light') {
-      document.documentElement.setAttribute('data-theme', 'light');
+    if (saved === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
     } else {
       document.documentElement.removeAttribute('data-theme');
     }

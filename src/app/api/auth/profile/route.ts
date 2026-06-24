@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
 
   const owner = await prisma.owner.findUnique({
     where: { id: user.id },
-    select: { id: true, username: true, email: true, restaurantName: true, ownerName: true, phone: true, createdAt: true }
+    select: { id: true, username: true, email: true, restaurantName: true, ownerName: true, phone: true, cuisine: true, createdAt: true }
   });
   if (!owner) return NextResponse.json({ success: false, error: { code: 'NOT_FOUND', message: 'Owner not found' } }, { status: 404 });
 
@@ -21,7 +21,7 @@ export async function PUT(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { restaurantName, ownerName, email, phone } = body;
+    const { restaurantName, ownerName, email, phone, cuisine } = body;
     const updated = await prisma.owner.update({
       where: { id: user.id },
       data: {
@@ -29,8 +29,9 @@ export async function PUT(request: NextRequest) {
         ...(ownerName !== undefined && { ownerName }),
         ...(email !== undefined && { email }),
         ...(phone !== undefined && { phone }),
+        ...(cuisine !== undefined && { cuisine }),
       },
-      select: { id: true, username: true, email: true, restaurantName: true, ownerName: true, phone: true, createdAt: true }
+      select: { id: true, username: true, email: true, restaurantName: true, ownerName: true, phone: true, cuisine: true, createdAt: true }
     });
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {

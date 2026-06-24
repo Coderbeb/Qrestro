@@ -20,6 +20,8 @@ export async function GET(request: NextRequest) {
         phone: true,
         role: true,
         subscriptionStatus: true,
+        showOnLanding: true,
+        cuisine: true,
         createdAt: true,
         updatedAt: true,
         plan: true,
@@ -46,30 +48,43 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { ownerId, tier } = body; // tier: FREE, PRO, PREMIUM
+    const { ownerId, tier, showOnLanding, cuisine } = body;
 
-    let plan = await prisma.subscriptionPlan.findUnique({ where: { tier } });
-    if (!plan) {
-      // Auto create plan if it doesn't exist
-      plan = await prisma.subscriptionPlan.create({
-        data: {
-          tier,
-          price: tier === 'FREE' ? 0 : tier === 'PRO' ? 49.99 : 99.99,
-          maxTables: tier === 'FREE' ? 5 : tier === 'PRO' ? 25 : 100,
-          features: []
-        }
-      });
+    const dataToUpdate: any = {};
+
+    if (tier) {
+      let plan = await prisma.subscriptionPlan.findUnique({ where: { tier } });
+      if (!plan) {
+        // Auto create plan if it doesn't exist
+        plan = await prisma.subscriptionPlan.create({
+          data: {
+            tier,
+            price: tier === 'FREE' ? 0 : tier === 'PRO' ? 49.99 : 99.99,
+            maxTables: tier === 'FREE' ? 5 : tier === 'PRO' ? 25 : 100,
+            features: []
+          }
+        });
+      }
+      dataToUpdate.planId = plan.id;
+    }
+
+    if (showOnLanding !== undefined) {
+      dataToUpdate.showOnLanding = showOnLanding;
+    }
+
+    if (cuisine !== undefined) {
+      dataToUpdate.cuisine = cuisine;
     }
 
     const updatedOwner = await prisma.owner.update({
       where: { id: ownerId },
-      data: { planId: plan.id }
+      data: dataToUpdate
     });
 
     return NextResponse.json({ success: true, data: updatedOwner });
 
   } catch (error) {
     console.error('Superadmin Update Plan error:', error);
-    return NextResponse.json({ success: false, error: { message: 'Failed to update plan' } }, { status: 500 });
+    return NextResponse.json({ success: false, error: { message: 'Failed to update restaurant data' } }, { status: 500 });
   }
 }

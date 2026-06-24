@@ -1,6 +1,7 @@
 'use client';
 import { use, useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { Sun, Moon, XCircle, CheckCircle2, ChefHat } from 'lucide-react';
 import { Suspense } from 'react';
 
 type OrderStatus = {
@@ -22,23 +23,22 @@ function LiveTrackingContent({ ownerId, tableNumber }: { ownerId: string, tableN
 
   const [order, setOrder] = useState<OrderStatus | null>(null);
   const [error, setError] = useState('');
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('theme') === 'dark';
+    }
+    return false;
+  });
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Read theme on mount
-  useEffect(() => {
-    const saved = localStorage.getItem('theme');
-    setIsDark(saved !== 'light');
-  }, []);
 
   function toggleTheme() {
     const newDark = !isDark;
     setIsDark(newDark);
     if (newDark) {
-      document.documentElement.removeAttribute('data-theme');
+      document.documentElement.setAttribute('data-theme', 'dark');
       localStorage.setItem('theme', 'dark');
     } else {
-      document.documentElement.setAttribute('data-theme', 'light');
+      document.documentElement.removeAttribute('data-theme');
       localStorage.setItem('theme', 'light');
     }
   }
@@ -88,23 +88,25 @@ function LiveTrackingContent({ ownerId, tableNumber }: { ownerId: string, tableN
           position: 'fixed',
           top: '1rem',
           right: '1rem',
-          fontSize: '1.1rem',
           zIndex: 10,
           background: 'var(--bg-surface)',
           border: '1px solid var(--border)',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
-        {isDark ? '☀️' : '🌙'}
+        {isDark ? <Sun size={18} /> : <Moon size={18} />}
       </button>
 
       <div className="success-card">
         {/* Status Icon */}
         {isCancelled ? (
-          <div className="success-icon" style={{ background: 'rgba(244,63,94,0.1)', borderColor: '#f43f5e', color: '#f43f5e' }}>✕</div>
+          <div className="success-icon" style={{ background: 'rgba(244,63,94,0.1)', borderColor: '#f43f5e', color: '#f43f5e', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><XCircle size={32} /></div>
         ) : currentIndex >= 2 ? (
-          <div className="success-icon" style={{ background: 'rgba(34,197,94,0.1)', borderColor: '#22c55e', color: '#22c55e' }}>✅</div>
+          <div className="success-icon" style={{ background: 'rgba(34,197,94,0.1)', borderColor: '#22c55e', color: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CheckCircle2 size={32} /></div>
         ) : (
-          <div className="success-icon" style={{ background: 'rgba(249,115,22,0.1)', borderColor: '#f97316', color: '#f97316' }}>👨‍🍳</div>
+          <div className="success-icon" style={{ background: 'rgba(249,115,22,0.1)', borderColor: '#f97316', color: '#f97316', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ChefHat size={32} /></div>
         )}
 
         <h1 style={{ fontSize: 'clamp(1.35rem, 5vw, 1.75rem)', fontWeight: 800, marginBottom: '0.5rem' }}>

@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { ShoppingBag, TrendingUp, Clock, Utensils, QrCode, Package, Inbox, CheckCircle2, ChevronRight } from 'lucide-react';
 
 type Stats = {
   totalOrders: number;
@@ -54,17 +55,17 @@ export default function DashboardPage() {
   useEffect(() => { load(); }, [load]);
 
   const statCards = stats ? [
-    { icon: '🛒', label: "Today's Orders", value: stats.todayOrders, bg: '#7c6dfa22', color: 'var(--accent)' },
-    { icon: '💰', label: "Today's Revenue", value: `₹${stats.todayRevenue.toFixed(2)}`, bg: '#22c55e22', color: 'var(--status-ready)' },
-    { icon: '⏳', label: 'Active Orders', value: stats.pendingOrders, bg: '#f9731622', color: 'var(--status-pending)' },
-    { icon: '🍽️', label: 'Menu Items', value: stats.menuItems, bg: '#eab30822', color: 'var(--status-preparing)' },
-    { icon: '📱', label: 'Tables', value: stats.tables, bg: '#a855f722', color: '#a855f7' },
-    { icon: '📦', label: 'Total Orders', value: stats.totalOrders, bg: '#6b728022', color: 'var(--text-secondary)' },
+    { icon: <ShoppingBag size={20} />, label: "Today's Orders", value: stats.todayOrders, bg: 'rgba(3, 77, 55, 0.08)', color: 'var(--accent)' },
+    { icon: <TrendingUp size={20} />, label: "Today's Revenue", value: `₹${stats.todayRevenue.toFixed(2)}`, bg: 'rgba(5, 150, 105, 0.08)', color: 'var(--status-ready)' },
+    { icon: <Clock size={20} />, label: 'Active Orders', value: stats.pendingOrders, bg: 'rgba(234, 88, 12, 0.08)', color: 'var(--status-pending)' },
+    { icon: <Utensils size={20} />, label: 'Menu Items', value: stats.menuItems, bg: 'rgba(217, 119, 6, 0.08)', color: 'var(--status-preparing)' },
+    { icon: <QrCode size={20} />, label: 'Tables', value: stats.tables, bg: 'rgba(197, 168, 128, 0.12)', color: 'var(--accent-2)' },
+    { icon: <Package size={20} />, label: 'Total Orders', value: stats.totalOrders, bg: 'rgba(100, 116, 139, 0.08)', color: 'var(--text-secondary)' },
   ] : [];
 
   const statusBadge = (status: string) => (
-    <span className={`badge badge-${status}`}>
-      {status === 'pending' ? '⏳' : status === 'preparing' ? '👨‍🍳' : status === 'ready' ? '✅' : '✔️'} {status}
+    <span className={`badge badge-${status}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+      {status === 'pending' ? <Clock size={12} /> : status === 'preparing' ? <Utensils size={12} /> : status === 'ready' ? <CheckCircle2 size={12} /> : <CheckCircle2 size={12} />} {status}
     </span>
   );
 
@@ -72,11 +73,12 @@ export default function DashboardPage() {
     <>
       <div className="page-header">
         <div>
+          <span className="page-header-pretitle">Overview</span>
           <h1>Dashboard</h1>
           <p>Overview of your restaurant activity</p>
         </div>
-        <Link href="/dashboard/orders" id="view-orders-btn" className="btn btn-primary">
-          View Live Orders →
+        <Link href="/dashboard/orders" id="view-orders-btn" className="btn btn-primary" style={{ gap: '0.35rem' }}>
+          View Live Orders <ChevronRight size={16} />
         </Link>
       </div>
 
@@ -85,11 +87,11 @@ export default function DashboardPage() {
       ) : (
         <>
           {/* Stat Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+          <div className="stats-cards-grid">
             {statCards.map(s => (
               <div key={s.label} className="stat-card">
-                <div className="stat-icon" style={{ background: s.bg }}>
-                  <span style={{ fontSize: '1.25rem' }}>{s.icon}</span>
+                <div className="stat-icon" style={{ background: s.bg, color: s.color, borderColor: s.color }}>
+                  {s.icon}
                 </div>
                 <div>
                   <div className="stat-value" style={{ color: s.color }}>{s.value}</div>
@@ -103,11 +105,11 @@ export default function DashboardPage() {
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
               <h3>Recent Orders</h3>
-              <Link href="/dashboard/orders" className="btn btn-ghost btn-sm">View all →</Link>
+              <Link href="/dashboard/orders" className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>View all <ChevronRight size={14} /></Link>
             </div>
             {recentOrders.length === 0 ? (
               <div className="empty-state">
-                <div className="empty-state-icon">📭</div>
+                <div className="empty-state-icon"><Inbox size={40} /></div>
                 <h3>No orders yet</h3>
                 <p>Orders will appear here once customers scan their QR codes</p>
               </div>

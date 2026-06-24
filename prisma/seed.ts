@@ -28,9 +28,9 @@ async function seed() {
     await prisma.owner.create({
       data: {
         username: 'superadmin',
-        email: 'admin@qrbite.com',
+        email: 'admin@qrestro.com',
         passwordHash,
-        restaurantName: 'QRBite Platform',
+        restaurantName: 'QRestro Platform',
         ownerName: 'Platform Admin',
         role: 'SUPER_ADMIN',
       },
@@ -38,6 +38,42 @@ async function seed() {
     console.log('  ✅ Super Admin created: username=superadmin password=admin123');
   } else {
     console.log('  ⏭️  Super Admin already exists, skipping.');
+  }
+  
+  // 3. Create Demo Restaurants
+  const demoRestaurants = [
+    { username: 'spicehub', email: 'spicehub@demo.com', restaurantName: 'SpiceHub', ownerName: 'Sanjay Kapoor', cuisine: 'Restaurant' },
+    { username: 'tandoortales', email: 'tandoortales@demo.com', restaurantName: 'Tandoor Tales', ownerName: 'Amit Sharma', cuisine: 'Indian Cuisine' },
+    { username: 'urbanbites', email: 'urbanbites@demo.com', restaurantName: 'Urban Bites', ownerName: 'Vikram Malhotra', cuisine: 'Cafe & Kitchen' },
+    { username: 'curryhouse', email: 'curryhouse@demo.com', restaurantName: 'Curry House', ownerName: 'Rohan Verma', cuisine: 'Restaurant' },
+    { username: 'foodfiesta', email: 'foodfiesta@demo.com', restaurantName: 'Food Fiesta', ownerName: 'Neha Gupta', cuisine: 'Multi Cuisine' },
+    { username: 'grillclub', email: 'grillclub@demo.com', restaurantName: 'The Grill Club', ownerName: 'Rajesh Sen', cuisine: 'Steakhouse' },
+  ];
+
+  console.log('🌱 Seeding demo restaurants...');
+  const passwordHash = await hashPassword('demo123');
+  const freePlan = await prisma.subscriptionPlan.findUnique({ where: { tier: 'FREE' } });
+
+  for (const demo of demoRestaurants) {
+    const existingRestaurant = await prisma.owner.findUnique({ where: { username: demo.username } });
+    if (!existingRestaurant) {
+      await prisma.owner.create({
+        data: {
+          username: demo.username,
+          email: demo.email,
+          passwordHash,
+          restaurantName: demo.restaurantName,
+          ownerName: demo.ownerName,
+          role: 'RESTAURANT_OWNER',
+          cuisine: demo.cuisine,
+          showOnLanding: true,
+          planId: freePlan?.id,
+        },
+      });
+      console.log(`  ✅ Demo Restaurant: ${demo.restaurantName}`);
+    } else {
+      console.log(`  ⏭️  Demo Restaurant ${demo.restaurantName} already exists, skipping.`);
+    }
   }
 
   console.log('\n🎉 Seed complete!');

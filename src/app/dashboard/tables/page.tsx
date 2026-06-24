@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { Plus, MoreVertical, Eye, Download, ExternalLink, Copy, RefreshCw, Pause, Play, Trash2, Utensils, QrCode, X, Sparkles } from 'lucide-react';
 
 type Table = { id: string; tableNumber: number; qrCodeImageUrl: string | null; qrCodeData: string; isActive: boolean; };
 type Order = { id: string; tableNumber: number; status: string; };
@@ -33,8 +34,8 @@ async function downloadBrandedQR(qrUrl: string, tableNumber: number, restaurantN
 
   // Gradient top
   const grad = ctx.createLinearGradient(0, 0, W, 0);
-  grad.addColorStop(0, 'rgba(139,92,246,0.18)');
-  grad.addColorStop(1, 'rgba(99,102,241,0.1)');
+  grad.addColorStop(0, 'rgba(3,77,55,0.18)');
+  grad.addColorStop(1, 'rgba(197,168,128,0.1)');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, BRAND_H + PAD);
 
@@ -69,12 +70,12 @@ async function downloadBrandedQR(qrUrl: string, tableNumber: number, restaurantN
   ctx.fillText(`Table ${tableNumber}`, W / 2, qrY + QR_SIZE + TABLE_H / 2 + 4, W - PAD * 2);
 
   // Accent underline
-  ctx.fillStyle = 'rgba(139,92,246,0.8)';
+  ctx.fillStyle = 'rgba(3,77,55,0.8)';
   ctx.fillRect(W / 2 - 24, qrY + QR_SIZE + TABLE_H - 2, 48, 3);
 
   const link = document.createElement('a');
   link.href = canvas.toDataURL('image/png');
-  link.download = `qr-table-${tableNumber}-branded.png`;
+  link.download = `qr-table-${tableNumber}.png`;
   link.click();
 }
 
@@ -174,6 +175,7 @@ export default function TablesPage() {
     <>
       <div className="page-header">
         <div>
+          <span className="page-header-pretitle">Dine-In Management</span>
           <h1>Tables & QR</h1>
           <p>{tables.length} table{tables.length !== 1 ? 's' : ''} configured</p>
         </div>
@@ -183,7 +185,7 @@ export default function TablesPage() {
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><span style={{ width: 10, height: 10, borderRadius: 3, background: '#f97316', display: 'inline-block' }} />1 Order</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><span style={{ width: 10, height: 10, borderRadius: 3, background: '#22c55e', display: 'inline-block' }} />2+ Orders</span>
           </div>
-          <button id="add-table-btn" className="btn btn-primary" onClick={() => { setNewTableNum(String(nextNum)); setShowAdd(true); }}>+ Add Table</button>
+          <button id="add-table-btn" className="btn btn-primary" onClick={() => { setNewTableNum(String(nextNum)); setShowAdd(true); }} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><Plus size={16} /> Add Table</button>
         </div>
       </div>
 
@@ -191,7 +193,7 @@ export default function TablesPage() {
       {showAdd && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowAdd(false)}>
           <div className="modal-box" style={{ maxWidth: 360 }}>
-            <div className="modal-header"><h3 className="modal-title">Add New Table</h3><button className="btn btn-ghost btn-icon" onClick={() => setShowAdd(false)}>✕</button></div>
+            <div className="modal-header"><h3 className="modal-title">Add New Table</h3><button className="btn btn-ghost btn-icon" onClick={() => setShowAdd(false)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} /></button></div>
             <div className="form-group" style={{ marginBottom: '1.25rem' }}>
               <label className="form-label">Table Number</label>
               <input type="number" className="input-field" min={1} value={newTableNum} onChange={e => setNewTableNum(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && handleAdd()} />
@@ -208,7 +210,7 @@ export default function TablesPage() {
       {loading ? (
         <div className="loading-center"><div className="spinner" /><span>Loading…</span></div>
       ) : tables.length === 0 ? (
-        <div className="empty-state"><div className="empty-state-icon">📱</div><h3>No tables configured</h3><p>Add your first table to generate a QR code</p><button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Add Table</button></div>
+        <div className="empty-state"><div className="empty-state-icon"><QrCode size={40} /></div><h3>No tables configured</h3><p>Add your first table to generate a QR code</p><button className="btn btn-primary" onClick={() => setShowAdd(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><Plus size={16} /> Add Table</button></div>
       ) : (
         <div className="tables-grid">
           {tables.map(table => {
@@ -221,22 +223,19 @@ export default function TablesPage() {
 
             return (
               <div key={table.id} className={cardClass} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '1.5rem 1rem', cursor: 'default' }}>
-                <button className="btn btn-ghost btn-sm btn-icon" style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', color: textColor }} onClick={e => toggleDropdown(e, table.id)}>⋮</button>
+                <button className="btn btn-ghost btn-sm btn-icon" style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', color: textColor, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} onClick={e => toggleDropdown(e, table.id)}><MoreVertical size={16} /></button>
                 {activeDropdown === table.id && (
-                  <div className="table-dropdown-menu" style={{ position: 'absolute', top: '2.5rem', right: '0.5rem', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '8px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.2)', zIndex: 10, minWidth: '185px', overflow: 'hidden' }}>
-                    <button className="dropdown-item" onClick={() => { setViewQR(table); setActiveDropdown(null); }}>👁 View QR Code</button>
-                    <button className="dropdown-item" onClick={() => { handleBrandedDownload(table); setActiveDropdown(null); }} disabled={brandDownloading === table.id}>{brandDownloading === table.id ? '⏳ Generating…' : '🎨 Branded Download'}</button>
-                    <button className="dropdown-item" onClick={() => { plainDownload(table); setActiveDropdown(null); }}>⬇ Download Plain QR</button>
-                    <button className="dropdown-item" onClick={() => { window.open(table.qrCodeData, '_blank'); setActiveDropdown(null); }}>🔗 Open Customer Link</button>
-                    <button className="dropdown-item" onClick={() => { copyLink(table); setActiveDropdown(null); }}>📋 Copy Link</button>
-                    <button className="dropdown-item" onClick={() => { regenerateQR(table.id); setActiveDropdown(null); }}>{regenerating === table.id ? '⏳ Regenerating…' : '🔄 Regenerate QR'}</button>
+                  <div className="table-dropdown-menu">
+                    <button className="dropdown-item" onClick={() => { setViewQR(table); setActiveDropdown(null); }}><Eye size={14} /> View QR Code</button>
+                    <button className="dropdown-item" onClick={() => { handleBrandedDownload(table); setActiveDropdown(null); }} disabled={brandDownloading === table.id}><Download size={14} /> {brandDownloading === table.id ? 'Generating…' : 'Download QR Code'}</button>
+                    <button className="dropdown-item" onClick={() => { copyLink(table); setActiveDropdown(null); }}><Copy size={14} /> Copy Link</button>
                     <div style={{ height: 1, background: 'var(--border)', margin: '0.25rem 0' }} />
-                    <button className="dropdown-item" onClick={() => { toggleActive(table); setActiveDropdown(null); }}>{table.isActive ? '⏸ Deactivate' : '▶ Activate'}</button>
-                    <button className="dropdown-item text-danger" onClick={() => { handleDelete(table.id, table.tableNumber); setActiveDropdown(null); }} disabled={deleting === table.id}>{deleting === table.id ? '…' : '🗑 Delete'}</button>
+                    <button className="dropdown-item" onClick={() => { toggleActive(table); setActiveDropdown(null); }}>{table.isActive ? <><Pause size={14} /> Deactivate</> : <><Play size={14} /> Activate</>}</button>
+                    <button className="dropdown-item text-danger" onClick={() => { handleDelete(table.id, table.tableNumber); setActiveDropdown(null); }} disabled={deleting === table.id}><Trash2 size={14} /> Delete</button>
                   </div>
                 )}
 
-                <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem', opacity: table.isActive ? 1 : 0.4 }}>🍽️</div>
+                <div style={{ marginBottom: '0.75rem', opacity: table.isActive ? 1 : 0.4, color: textColor }}><Utensils size={36} style={{ strokeWidth: 1.5 }} /></div>
                 <div className="table-card-number" style={{ color: textColor, margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>Table {table.tableNumber}</div>
                 <div style={{ marginTop: '0.5rem', padding: '0.25rem 0.75rem', background: table.isActive && orderCount > 0 ? badgeColor : 'transparent', color: table.isActive && orderCount > 0 ? '#fff' : textColor, borderRadius: '999px', fontSize: '0.8rem', fontWeight: 600, border: !(table.isActive && orderCount > 0) ? `1px solid ${badgeColor}` : 'none' }}>
                   {statusText}
@@ -253,7 +252,7 @@ export default function TablesPage() {
           <div className="modal-box" style={{ maxWidth: 380, textAlign: 'center' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header" style={{ borderBottom: 'none', paddingBottom: 0 }}>
               <h3 className="modal-title">Table {viewQR.tableNumber} QR</h3>
-              <button className="btn btn-ghost btn-icon" onClick={() => setViewQR(null)}>✕</button>
+              <button className="btn btn-ghost btn-icon" onClick={() => setViewQR(null)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} /></button>
             </div>
             <div style={{ padding: '1.25rem 2rem' }}>
               {viewQR.qrCodeImageUrl && (
@@ -264,10 +263,10 @@ export default function TablesPage() {
               <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500 }}>{restaurantName} · Table {viewQR.tableNumber}</div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', padding: '0 1.5rem 1.5rem' }}>
-              <button className="btn btn-primary btn-full" onClick={() => handleBrandedDownload(viewQR)} disabled={brandDownloading === viewQR.id}>
-                {brandDownloading === viewQR.id ? '⏳ Generating…' : '🎨 Download Branded QR'}
+              <button className="btn btn-primary btn-full" onClick={() => handleBrandedDownload(viewQR)} disabled={brandDownloading === viewQR.id} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                <Sparkles size={16} /> {brandDownloading === viewQR.id ? 'Generating…' : 'Download Branded QR'}
               </button>
-              <button className="btn btn-ghost btn-full" onClick={() => plainDownload(viewQR)}>⬇ Download Plain PNG</button>
+              <button className="btn btn-ghost btn-full" onClick={() => plainDownload(viewQR)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}><Download size={16} /> Download Plain PNG</button>
             </div>
           </div>
         </div>

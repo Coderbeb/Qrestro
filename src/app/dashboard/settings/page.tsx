@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { Store, Lock } from 'lucide-react';
 
 type Owner = {
   id: string;
@@ -8,6 +9,7 @@ type Owner = {
   restaurantName: string | null;
   ownerName: string | null;
   phone: string | null;
+  cuisine: string | null;
   createdAt: string;
 };
 
@@ -18,7 +20,7 @@ function getAuthHeader() {
 
 export default function SettingsPage() {
   const [owner, setOwner] = useState<Owner | null>(null);
-  const [profile, setProfile] = useState({ restaurantName: '', ownerName: '', email: '', phone: '' });
+  const [profile, setProfile] = useState({ restaurantName: '', ownerName: '', email: '', phone: '', cuisine: '' });
   const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPwd, setSavingPwd] = useState(false);
@@ -42,6 +44,7 @@ export default function SettingsPage() {
             ownerName: data.data.ownerName || '',
             email: data.data.email,
             phone: data.data.phone || '',
+            cuisine: data.data.cuisine || '',
           });
         }
       });
@@ -103,6 +106,7 @@ export default function SettingsPage() {
     <>
       <div className="page-header">
         <div>
+          <span className="page-header-pretitle">Configuration</span>
           <h1>Settings</h1>
           <p>Manage your profile and account security</p>
         </div>
@@ -111,7 +115,9 @@ export default function SettingsPage() {
       <div className="settings-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.5rem' }}>
         {/* Profile Form */}
         <div className="card">
-          <h3 style={{ marginBottom: '1.5rem' }}>🏪 Restaurant Profile</h3>
+          <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Store size={20} style={{ color: 'var(--accent)' }} /> Restaurant Profile
+          </h3>
           <form onSubmit={handleProfileSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div className="form-group">
               <label className="form-label">Restaurant Name</label>
@@ -120,6 +126,10 @@ export default function SettingsPage() {
             <div className="form-group">
               <label className="form-label">Owner Name</label>
               <input type="text" className="input-field" value={profile.ownerName} onChange={e => setProfile(p => ({ ...p, ownerName: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Cuisine / Style</label>
+              <input type="text" className="input-field" placeholder="e.g. Indian Cuisine, Cafe & Kitchen, Steakhouse" value={profile.cuisine} onChange={e => setProfile(p => ({ ...p, cuisine: e.target.value }))} />
             </div>
             <div className="form-group">
               <label className="form-label">Email</label>
@@ -142,7 +152,9 @@ export default function SettingsPage() {
 
         {/* Password Form */}
         <div className="card">
-          <h3 style={{ marginBottom: '1.5rem' }}>🔒 Change Password</h3>
+          <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Lock size={20} style={{ color: 'var(--accent)' }} /> Change Password
+          </h3>
           <form onSubmit={handlePasswordChange} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div className="form-group">
               <label className="form-label">Current Password</label>

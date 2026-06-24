@@ -1,6 +1,7 @@
 'use client';
 import { useState, FormEvent } from 'react';
 import Link from 'next/link';
+import { Utensils, Eye, EyeOff } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 type FormData = {
@@ -23,6 +24,7 @@ export default function RegisterPage() {
   const [form, setForm] = useState<FormData>(initialForm);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   function set(field: keyof FormData) {
     return (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -56,7 +58,9 @@ export default function RegisterPage() {
     <div className="auth-page" style={{ alignItems: 'flex-start', paddingTop: '2rem' }}>
       <div className="auth-card" style={{ maxWidth: 520 }}>
         <div className="auth-logo">
-          <div className="auth-logo-icon">🍴</div>
+          <div className="auth-logo-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Utensils size={24} style={{ color: 'var(--accent)' }} />
+          </div>
           <h1 className="auth-title">Register your restaurant</h1>
           <p className="auth-subtitle">Set up your QR ordering system in minutes</p>
         </div>
@@ -92,7 +96,40 @@ export default function RegisterPage() {
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="reg-password">Password *</label>
-              <input id="reg-password" type="password" className="input-field" placeholder="Min 6 characters" value={form.password} onChange={set('password')} required minLength={6} />
+              <div style={{ position: 'relative' }}>
+                <input
+                  id="reg-password"
+                  type={showPassword ? 'text' : 'password'}
+                  className="input-field"
+                  style={{ paddingRight: '3rem' }}
+                  placeholder="Min 6 characters"
+                  value={form.password}
+                  onChange={set('password')}
+                  required
+                  minLength={6}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: 'absolute',
+                    right: '1rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    padding: '0.25rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
           </div>
           {/* Table count */}

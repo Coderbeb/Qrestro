@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { Clock, ChefHat, CheckCircle2, Check, RefreshCw, ShoppingBag, X } from 'lucide-react';
 
 type OrderItem = {
   id: string;
@@ -20,10 +21,10 @@ type Order = {
 };
 
 const COLUMNS = [
-  { status: 'pending',   label: 'Pending',   emoji: '⏳', color: 'var(--status-pending)' },
-  { status: 'preparing', label: 'Preparing', emoji: '👨‍🍳', color: 'var(--status-preparing)' },
-  { status: 'ready',     label: 'Ready',     emoji: '✅', color: 'var(--status-ready)' },
-  { status: 'completed', label: 'Completed', emoji: '✔️', color: 'var(--status-completed)' },
+  { status: 'pending',   label: 'Pending',   icon: Clock, color: 'var(--status-pending)' },
+  { status: 'preparing', label: 'Preparing', icon: ChefHat, color: 'var(--status-preparing)' },
+  { status: 'ready',     label: 'Ready',     icon: CheckCircle2, color: 'var(--status-ready)' },
+  { status: 'completed', label: 'Completed', icon: Check, color: 'var(--status-completed)' },
 ];
 
 const NEXT_STATUS: Record<string, string | null> = {
@@ -107,19 +108,22 @@ export default function OrdersPage() {
     <>
       <div className="page-header">
         <div>
+          <span className="page-header-pretitle">Real-Time Monitor</span>
           <h1>Live Orders</h1>
           <p>{activeOrders.filter(o => o.status !== 'completed').length} active · auto-refreshes every 5s</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--status-ready)', animation: 'pulse-glow 2s ease infinite' }} />
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Live</span>
-          <button id="refresh-orders-btn" className="btn btn-ghost btn-sm" onClick={loadOrders}>↻ Refresh</button>
+          <button id="refresh-orders-btn" className="btn btn-ghost btn-sm" onClick={loadOrders} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+            <RefreshCw size={14} /> Refresh
+          </button>
         </div>
       </div>
 
       {activeOrders.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">🛒</div>
+          <div className="empty-state-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ShoppingBag size={40} style={{ strokeWidth: 1.5 }} /></div>
           <h3>No active orders</h3>
           <p>Orders will appear here as customers place them</p>
         </div>
@@ -131,7 +135,7 @@ export default function OrdersPage() {
               <div key={col.status} className="kanban-col">
                 <div className="kanban-col-header">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span>{col.emoji}</span>
+                    <col.icon size={16} style={{ color: col.color }} />
                     <span style={{ color: col.color }}>{col.label}</span>
                   </div>
                   <span style={{
@@ -181,7 +185,7 @@ export default function OrdersPage() {
                             onClick={() => cancelOrder(order)}
                             disabled={updating === order.id}
                             title="Cancel order"
-                          >✕</button>
+                          ><X size={14} /></button>
                         )}
                       </div>
                     </div>

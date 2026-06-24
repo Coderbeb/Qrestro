@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
+import { Folder, Utensils, Trash2, Clock, Plus, ArrowLeft, Edit, Layers } from 'lucide-react';
 
 type Category = {
   id: string;
@@ -167,16 +168,17 @@ export default function MenuPage() {
       {/* Header */}
       <div className="page-header">
         <div>
+          <span className="page-header-pretitle">Catalog</span>
           <h1>Menu</h1>
           <p>{items.length} item{items.length !== 1 ? 's' : ''} · {categories.length} categor{categories.length !== 1 ? 'ies' : 'y'}</p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem' }}>
           {tab === 'categories' ? (
-            <button className="btn btn-primary" onClick={openAddCat}>+ Add Category</button>
+            <button className="btn btn-primary" onClick={openAddCat} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><Plus size={16} /> Add Category</button>
           ) : (
             <>
-              <button className="btn btn-ghost" onClick={() => setTab('categories')}>🗂 Categories</button>
-              <button id="add-menu-item-btn" className="btn btn-primary" onClick={openAddItem}>+ Add Item</button>
+              <button className="btn btn-ghost" onClick={() => setTab('categories')} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><Folder size={16} /> Categories</button>
+              <button id="add-menu-item-btn" className="btn btn-primary" onClick={openAddItem} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><Plus size={16} /> Add Item</button>
             </>
           )}
         </div>
@@ -185,8 +187,8 @@ export default function MenuPage() {
       {/* Tab bar */}
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0' }}>
         {(['items', 'categories'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{ padding: '0.6rem 1.25rem', background: 'none', border: 'none', cursor: 'pointer', fontWeight: tab === t ? 700 : 500, color: tab === t ? 'var(--accent)' : 'var(--text-secondary)', borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent', marginBottom: '-1px', transition: 'all 0.2s', fontSize: '0.9rem', textTransform: 'capitalize' }}>
-            {t === 'items' ? `🍽️ Items` : `🗂 Categories`}
+          <button key={t} onClick={() => setTab(t)} style={{ padding: '0.6rem 1.25rem', background: 'none', border: 'none', cursor: 'pointer', fontWeight: tab === t ? 700 : 500, color: tab === t ? 'var(--accent)' : 'var(--text-secondary)', borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent', marginBottom: '-1px', transition: 'all 0.2s', fontSize: '0.9rem', textTransform: 'capitalize', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+            {t === 'items' ? <><Utensils size={16} /> Items</> : <><Folder size={16} /> Categories</>}
           </button>
         ))}
       </div>
@@ -196,13 +198,13 @@ export default function MenuPage() {
       ) : tab === 'categories' ? (
         /* ── Categories Tab ── */
         <>
-          <button className="btn btn-ghost btn-sm" onClick={() => setTab('items')} style={{ marginBottom: '1rem' }}>← Back to Items</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setTab('items')} style={{ marginBottom: '1rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><ArrowLeft size={14} /> Back to Items</button>
           {categories.length === 0 ? (
             <div className="empty-state">
-              <div className="empty-state-icon">🗂</div>
+              <div className="empty-state-icon"><Folder size={40} /></div>
               <h3>No categories yet</h3>
               <p>Create categories to organize your menu items</p>
-              <button className="btn btn-primary" onClick={openAddCat}>+ Create First Category</button>
+              <button className="btn btn-primary" onClick={openAddCat} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><Plus size={16} /> Create First Category</button>
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
@@ -213,12 +215,12 @@ export default function MenuPage() {
                       <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)', marginBottom: '0.25rem' }}>{cat.name}</div>
                       {cat.description && <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>{cat.description}</div>}
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', background: 'var(--accent-glow)', color: 'var(--accent)', padding: '0.2rem 0.65rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600 }}>
-                        🍽️ {cat._count.items} item{cat._count.items !== 1 ? 's' : ''}
+                        <Utensils size={12} /> {cat._count.items} item{cat._count.items !== 1 ? 's' : ''}
                       </span>
                     </div>
                     <div style={{ display: 'flex', gap: '0.35rem', flexShrink: 0 }}>
-                      <button className="btn btn-ghost btn-sm btn-icon" onClick={() => openEditCat(cat)} title="Edit">✏️</button>
-                      <button className="btn btn-danger btn-sm btn-icon" onClick={() => handleDeleteCat(cat.id, cat.name)} disabled={deletingCat === cat.id} title="Delete">{deletingCat === cat.id ? '…' : '🗑'}</button>
+                      <button className="btn btn-ghost btn-sm btn-icon" onClick={() => openEditCat(cat)} title="Edit" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Edit size={14} /></button>
+                      <button className="btn btn-danger btn-sm btn-icon" onClick={() => handleDeleteCat(cat.id, cat.name)} disabled={deletingCat === cat.id} title="Delete" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{deletingCat === cat.id ? '…' : <Trash2 size={14} />}</button>
                     </div>
                   </div>
                 </div>
@@ -233,7 +235,7 @@ export default function MenuPage() {
           {categories.length > 0 && (
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
               {[{ id: 'all', name: `All (${items.length})` }, ...categories.map(c => ({ id: c.id, name: `${c.name} (${c._count.items})` })), { id: 'uncategorized', name: `Uncategorized (${items.filter(i => !i.categoryId).length})` }].map(f => (
-                <button key={f.id} onClick={() => setFilterCat(f.id)} style={{ padding: '0.35rem 0.9rem', borderRadius: '999px', border: '1px solid', borderColor: filterCat === f.id ? 'var(--accent)' : 'var(--border)', background: filterCat === f.id ? 'rgba(139,92,246,0.15)' : 'transparent', color: filterCat === f.id ? 'var(--accent)' : 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: filterCat === f.id ? 700 : 500, cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap' }}>
+                <button key={f.id} onClick={() => setFilterCat(f.id)} style={{ padding: '0.35rem 0.9rem', borderRadius: '999px', border: '1px solid', borderColor: filterCat === f.id ? 'var(--accent)' : 'var(--border)', background: filterCat === f.id ? 'var(--accent-glow)' : 'transparent', color: filterCat === f.id ? 'var(--accent)' : 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: filterCat === f.id ? 700 : 500, cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap' }}>
                   {f.name}
                 </button>
               ))}
@@ -242,17 +244,17 @@ export default function MenuPage() {
 
           {filteredItems.length === 0 ? (
             <div className="empty-state">
-              <div className="empty-state-icon">🍽️</div>
+              <div className="empty-state-icon"><Utensils size={40} /></div>
               <h3>{items.length === 0 ? 'No menu items yet' : 'No items in this category'}</h3>
               <p>{items.length === 0 ? 'Add your first item to get started' : 'Add items or change category filter'}</p>
-              <button className="btn btn-primary" onClick={openAddItem}>+ Add Item</button>
+              <button className="btn btn-primary" onClick={openAddItem} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><Plus size={16} /> Add Item</button>
             </div>
           ) : (
             <div className="menu-grid">
               {filteredItems.map(item => (
                 <div key={item.id} className="menu-item-card">
                   <div className="menu-item-img">
-                    {item.imageUrl ? <img src={item.imageUrl} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '🍴'}
+                    {item.imageUrl ? <img src={item.imageUrl} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Utensils size={36} style={{ strokeWidth: 1.5, opacity: 0.4 }} />}
                   </div>
                   <div className="menu-item-body">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem', gap: '0.5rem' }}>
@@ -264,20 +266,20 @@ export default function MenuPage() {
                     </div>
                     {/* Category chip */}
                     {item.category && (
-                      <span style={{ display: 'inline-block', background: 'rgba(139,92,246,0.12)', color: 'var(--accent)', padding: '0.15rem 0.55rem', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 600, marginBottom: '0.35rem' }}>
+                      <span style={{ display: 'inline-block', background: 'var(--accent-glow)', color: 'var(--accent)', padding: '0.15rem 0.55rem', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 600, marginBottom: '0.35rem' }}>
                         {item.category.name}
                       </span>
                     )}
                     {item.description && <div className="menu-item-desc">{item.description}</div>}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                      <span>⏱ {item.preparationTime} min</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}><Clock size={12} /> {item.preparationTime} min</span>
                       <span className={`badge ${item.isAvailable ? 'badge-ready' : 'badge-cancelled'}`} style={{ padding: '0.1rem 0.5rem', fontSize: '0.7rem' }}>{item.isAvailable ? 'Available' : 'Unavailable'}</span>
                     </div>
                     <div className="menu-item-footer">
                       <div className="menu-item-price">₹{item.price.toFixed(2)}</div>
                       <div className="menu-item-actions">
-                        <button id={`edit-item-${item.id}`} className="btn btn-ghost btn-sm btn-icon" onClick={() => openEditItem(item)} title="Edit">✏️</button>
-                        <button id={`delete-item-${item.id}`} className="btn btn-danger btn-sm btn-icon" onClick={() => handleDeleteItem(item.id)} disabled={deletingItem === item.id} title="Delete">{deletingItem === item.id ? '…' : '🗑'}</button>
+                        <button id={`edit-item-${item.id}`} className="btn btn-ghost btn-sm btn-icon" onClick={() => openEditItem(item)} title="Edit" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Edit size={14} /></button>
+                        <button id={`delete-item-${item.id}`} className="btn btn-danger btn-sm btn-icon" onClick={() => handleDeleteItem(item.id)} disabled={deletingItem === item.id} title="Delete" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{deletingItem === item.id ? '…' : <Trash2 size={14} />}</button>
                       </div>
                     </div>
                   </div>
