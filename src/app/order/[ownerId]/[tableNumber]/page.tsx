@@ -139,7 +139,7 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
                       <div className="order-item-prep" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}><Clock size={12} /> {item.preparationTime} min</div>
                     </div>
                     {qty === 0 ? (
-                      <button id={`add-${item.id}`} className="btn btn-primary btn-sm" onClick={() => addToCart(item)}>+ Add</button>
+                      <button id={`add-${item.id}`} className="btn btn-primary btn-sm btn-pill" onClick={() => addToCart(item)}>+ Add</button>
                     ) : (
                       <div className="qty-control">
                         <button className="qty-btn" onClick={() => removeFromCart(item.id)}>−</button>

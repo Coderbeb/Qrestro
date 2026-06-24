@@ -137,8 +137,8 @@ export default function LandingPage() {
             </div>
             
             <h1 className="hero-heading">
-              Run your<br />
-              restaurant.<br />
+              Run your <br />
+              restaurant. <br />
               <span className="accent-text">Effortlessly.</span>
             </h1>
             
