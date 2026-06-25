@@ -170,11 +170,6 @@
 }
 /* kanban board backgrounds handled dynamically via CSS variables */
 /* modal-box dark theme handled dynamically via --bg-modal */
-[data-theme="dark"] .toast {
-  background: rgba(20, 20, 36, 0.95);
-  border-color: var(--border);
-  color: var(--text-primary);
-}
 [data-theme="dark"] .auth-card {
   background: rgba(20, 20, 36, 0.4);
 }
@@ -1146,10 +1141,11 @@ input::-ms-clear {
 }
 .toast {
   padding: 0.95rem 1.4rem;
-  background: rgba(20, 20, 36, 0.8);
+  background: var(--bg-surface);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
   border-radius: var(--radius-md);
   font-size: 0.875rem;
   font-weight: 600;

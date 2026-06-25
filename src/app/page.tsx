@@ -103,15 +103,6 @@ export default function LandingPage() {
     setCheckingAuth(false);
   }, [router]);
 
-  if (checkingAuth) {
-    return (
-      <div className="loading-center" style={{ minHeight: '100vh', background: 'var(--bg-base)' }}>
-        <div className="spinner" style={{ width: 40, height: 40 }} />
-        <span>Loading...</span>
-      </div>
-    );
-  }
-
   // Fetch featured restaurants on mount
   useEffect(() => {
     async function fetchFeatured() {
@@ -130,6 +121,15 @@ export default function LandingPage() {
     }
     fetchFeatured();
   }, []);
+
+  if (checkingAuth) {
+    return (
+      <div className="loading-center" style={{ minHeight: '100vh', background: 'var(--bg-base)' }}>
+        <div className="spinner" style={{ width: 40, height: 40 }} />
+        <span>Loading...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="landing-container">

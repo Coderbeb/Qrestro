@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -56,25 +57,70 @@ export default function LoginPage() {
         body: JSON.stringify(form),
       });
       const data = await res.json();
-      if (!data.success) { setError(data.error?.message || 'Login failed'); return; }
+      if (!data.success) {
+        setError(data.error?.message || 'Login failed');
+        setLoading(false);
+        return;
+      }
       localStorage.setItem('token', data.data.token);
       localStorage.setItem('owner', JSON.stringify(data.data.owner));
       // Set cookie for middleware access on page refresh
       document.cookie = `token=${data.data.token}; path=/; max-age=86400; SameSite=Lax`;
-      if (data.data.owner.role === 'SUPER_ADMIN') {
-        router.push('/superadmin');
-      } else {
-        router.push('/dashboard');
-      }
+      
+      setToast({ message: 'Logged in successfully!', type: 'success' });
+      
+      setTimeout(() => {
+        if (data.data.owner.role === 'SUPER_ADMIN') {
+          router.push('/superadmin');
+        } else {
+          router.push('/dashboard');
+        }
+      }, 1000);
     } catch {
       setError('Network error. Please try again.');
-    } finally {
       setLoading(false);
     }
   }
 
   return (
     <div className="auth-page">
+      {toast && (
+        <>
+          <style>{`
+            @keyframes slideDown {
+              from {
+                opacity: 0;
+                transform: translate(-50%, -20px);
+              }
+              to {
+                opacity: 1;
+                transform: translate(-50%, 0);
+              }
+            }
+            .toast-top-center {
+              position: fixed;
+              top: 2rem;
+              left: 50%;
+              transform: translate(-50%, 0);
+              z-index: 9999;
+              animation: slideDown 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            }
+            .toast-top-center .toast {
+              animation: none !important;
+            }
+          `}</style>
+          <div className="toast-top-center">
+            <div className="toast toast-success" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <span style={{ color: 'var(--status-ready, #10b981)', display: 'flex', alignItems: 'center' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </span>
+              <span>{toast.message}</span>
+            </div>
+          </div>
+        </>
+      )}
       <div className="auth-card">
         <div className="auth-logo">
           <div className="auth-logo-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
