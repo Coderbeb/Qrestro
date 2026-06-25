@@ -1,8 +1,17 @@
 import prisma from '@/lib/db';
 import { authenticateRequest, comparePassword, hashPassword } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { isRateLimited } from '@/lib/rateLimit';
 
 export async function POST(request: NextRequest) {
+  // Rate limit: max 5 password change attempts per minute per IP
+  if (isRateLimited(request, 5, 60000)) {
+    return NextResponse.json(
+      { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Too many attempts. Please wait a moment.' } },
+      { status: 429 }
+    );
+  }
+
   const user = authenticateRequest(request);
   if (!user) return NextResponse.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
 

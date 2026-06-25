@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Sparkles,
   Play,
@@ -72,12 +73,44 @@ const DEFAULT_PARTNERS = [
 ];
 
 export default function LandingPage() {
+  const router = useRouter();
   const [partners, setPartners] = useState<Array<{ id?: string; restaurantName: string; cuisine: string }>>([]);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
-  // Force light mode on landing page by removing data-theme attribute
+  // Force light mode and verify active session to auto-redirect
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token');
+      const ownerStr = localStorage.getItem('owner');
+      if (token && ownerStr) {
+        try {
+          const owner = JSON.parse(ownerStr);
+          if (owner && owner.role === 'SUPER_ADMIN') {
+            router.replace('/superadmin');
+            return;
+          } else if (owner) {
+            router.replace('/dashboard');
+            return;
+          }
+        } catch {
+          // Clear corrupted localStorage
+          localStorage.removeItem('token');
+          localStorage.removeItem('owner');
+        }
+      }
+    }
     document.documentElement.removeAttribute('data-theme');
-  }, []);
+    setCheckingAuth(false);
+  }, [router]);
+
+  if (checkingAuth) {
+    return (
+      <div className="loading-center" style={{ minHeight: '100vh', background: 'var(--bg-base)' }}>
+        <div className="spinner" style={{ width: 40, height: 40 }} />
+        <span>Loading...</span>
+      </div>
+    );
+  }
 
   // Fetch featured restaurants on mount
   useEffect(() => {

@@ -1,8 +1,10 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { LayoutDashboard, UtensilsCrossed, QrCode, ShoppingBag, Settings, LogOut, Sun, Moon, Lock, Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useSocket } from '@/lib/useSocket';
+import { playNotificationSound } from '@/lib/audio';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} />, id: '' },
@@ -15,7 +17,7 @@ const NAV_ITEMS = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [owner, setOwner] = useState<{ restaurantName?: string; username?: string } | null>(null);
+  const [owner, setOwner] = useState<{ id?: string; restaurantName?: string; username?: string } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   
@@ -63,6 +65,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       document.documentElement.removeAttribute('data-theme');
     }
   }, [router]);
+
+  const socketListeners = useMemo(() => ({
+    'order:new': () => {
+      playNotificationSound();
+    }
+  }), []);
+
+  useSocket(owner?.id || null, socketListeners);
 
   // Close sidebar and profile menu on route change (mobile)
   useEffect(() => {

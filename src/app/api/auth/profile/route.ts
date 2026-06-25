@@ -22,6 +22,20 @@ export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
     const { restaurantName, ownerName, email, phone, cuisine } = body;
+
+    // Check email uniqueness if email is being changed
+    if (email !== undefined) {
+      const existingOwner = await prisma.owner.findFirst({
+        where: { email, id: { not: user.id } },
+      });
+      if (existingOwner) {
+        return NextResponse.json(
+          { success: false, error: { code: 'DUPLICATE_EMAIL', message: 'This email is already in use by another account' } },
+          { status: 409 }
+        );
+      }
+    }
+
     const updated = await prisma.owner.update({
       where: { id: user.id },
       data: {

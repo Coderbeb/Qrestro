@@ -574,10 +574,72 @@ p  { color: var(--text-secondary); }
   color: #ef4444;
 }
 
+.btn-track-orders {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  background-color: var(--status-pending-bg) !important;
+  border: 1px solid rgba(234, 88, 12, 0.15) !important;
+  color: var(--status-pending) !important;
+  font-weight: 600 !important;
+  transition: all var(--transition) !important;
+}
+.btn-track-orders:hover {
+  background-color: rgba(234, 88, 12, 0.15) !important;
+  border-color: rgba(234, 88, 12, 0.3) !important;
+  transform: translateY(-1px) !important;
+}
+[data-theme="dark"] .btn-track-orders {
+  border-color: rgba(255, 159, 10, 0.15) !important;
+}
+[data-theme="dark"] .btn-track-orders:hover {
+  background-color: rgba(255, 159, 10, 0.22) !important;
+  border-color: rgba(255, 159, 10, 0.3) !important;
+}
+
 .btn-sm { padding: 0.45rem 1rem; font-size: 0.8rem; border-radius: var(--radius-sm); }
 .btn-lg { padding: 0.9rem 2.25rem; font-size: 1rem; border-radius: var(--radius-md); }
 .btn-icon { padding: 0.5rem; border-radius: var(--radius-sm); width: 2rem; height: 2rem; display: inline-flex; align-items: center; justify-content: center; }
 .btn-full { width: 100%; }
+
+.order-tracking-card {
+  border: 1px solid #034d37 !important;
+  border-radius: var(--radius-md) !important;
+  overflow: hidden !important;
+  flex-shrink: 0 !important;
+  background: var(--bg-surface) !important;
+  box-shadow: var(--shadow-sm) !important;
+  transition: all var(--transition) !important;
+}
+.order-tracking-card:hover {
+  border-color: #023d2b !important;
+  transform: translateY(-2px) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+[data-theme="dark"] .order-tracking-card {
+  border-color: #10b981 !important;
+}
+[data-theme="dark"] .order-tracking-card:hover {
+  border-color: #059669 !important;
+}
+
+.order-tracking-header {
+  background: #034d37 !important;
+  color: #ffffff !important;
+  padding: 0.45rem 0.75rem !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+}
+[data-theme="dark"] .order-tracking-header {
+  background: #112620 !important;
+  color: #f5f7f6 !important;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.2) !important;
+}
+
+.order-tracking-body {
+  padding: 0.75rem !important;
+}
 
 /* ─── Input ─────────────────────────────────────────────────── */
 .input-field {
@@ -1527,10 +1589,12 @@ input::-ms-clear {
   position: relative;
 }
 .order-item-img img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform var(--transition-slow);
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  display: block !important;
+  padding: 4px !important;
+  transition: transform var(--transition-slow) !important;
 }
 .order-item-card:hover .order-item-img img {
   transform: scale(1.05);
@@ -1698,10 +1762,11 @@ input::-ms-clear {
   padding: 5rem 1.25rem 2rem;
 }
 .success-card {
-  background: rgba(20, 20, 36, 0.5);
+  background: var(--bg-surface);
+  color: var(--text-primary);
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   padding: 2.75rem 1.75rem;
   text-align: center;
@@ -1736,10 +1801,6 @@ input::-ms-clear {
   background: rgba(0,0,0,0.04);
   color: var(--text-primary);
 }
-[data-theme="light"] .success-card {
-  background: rgba(255,255,255,0.95);
-  border-color: rgba(0,0,0,0.08);
-}
 
 /* ─── Mobile overrides for order / success pages ────────── */
 @media (max-width: 768px) {
@@ -1766,6 +1827,7 @@ input::-ms-clear {
     align-items: flex-end !important;
     justify-content: center !important;
     background: rgba(0, 0, 0, 0.45) !important;
+    padding: 0 !important;
   }
 
   .order-page .modal-box {
@@ -1782,11 +1844,95 @@ input::-ms-clear {
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.12) !important;
     max-height: 85vh !important;
   }
+
+  .success-page {
+    padding: 2rem 1rem 1.5rem !important;
+    background: var(--bg-base) !important;
+    align-items: center !important;
+    justify-content: center !important;
+    display: flex !important;
+    min-height: 100vh !important;
+  }
+
+  .success-card {
+    background: var(--bg-surface) !important;
+    border: 1px solid var(--border) !important;
+    box-shadow: var(--shadow-md) !important;
+    border-radius: var(--radius-lg) !important;
+    padding: 1.5rem 1.15rem !important;
+    max-width: 360px !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+  }
+
+  .success-icon {
+    width: 52px !important;
+    height: 52px !important;
+    margin: 0 auto 0.75rem !important;
+  }
+
+  .success-icon svg {
+    width: 24px !important;
+    height: 24px !important;
+  }
+
+  .success-card h1 {
+    font-size: 1.25rem !important;
+    margin-bottom: 0.25rem !important;
+  }
+
+  .success-card p {
+    font-size: 0.8rem !important;
+    margin-bottom: 1rem !important;
+  }
+
+  .success-progress-container {
+    margin-bottom: 1rem !important;
+  }
+
+  .success-details-card {
+    padding: 0.85rem !important;
+    margin-bottom: 1rem !important;
+  }
+
+  .success-details-header {
+    padding-bottom: 0.5rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+
+  .success-details-val {
+    font-size: 1.15rem !important;
+  }
+
+  .success-details-items {
+    font-size: 0.8rem !important;
+    gap: 0.2rem !important;
+  }
+
+  .success-details-footer {
+    margin-top: 0.75rem !important;
+    padding-top: 0.5rem !important;
+  }
+
+  .success-details-total {
+    font-size: 1rem !important;
+  }
 }
 
 @keyframes slideUpBottom {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
+}
+
+@keyframes icon-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(0.95); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+.pulse-icon {
+  animation: icon-pulse 1.8s ease-in-out infinite;
 }
 
 /* ─── Toggle ─────────────────────────────────────────────────── */

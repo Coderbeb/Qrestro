@@ -14,7 +14,10 @@ export async function GET(request: NextRequest) {
 
     if (!ownerId) {
       const user = authenticateRequest(request);
-      if (user) where.ownerId = user.id;
+      if (!user) {
+        return NextResponse.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required when ownerId is not provided' } }, { status: 401 });
+      }
+      where.ownerId = user.id;
     }
 
     const items = await prisma.menuItem.findMany({

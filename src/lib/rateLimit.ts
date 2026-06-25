@@ -23,7 +23,16 @@ if (typeof global !== 'undefined') {
 }
 
 /**
- * Checks if a request is rate limited.
+ * Checks if a request is rate limited using an in-memory store.
+ *
+ * **⚠️ Serverless/Edge warning:** This uses an in-memory Map that resets on
+ * every cold start. On serverless platforms (Vercel, AWS Lambda) this provides
+ * minimal protection. For robust rate limiting in serverless environments,
+ * replace this with a Redis-backed solution (e.g. Upstash Redis).
+ *
+ * For self-hosted / VPS deployments (single long-running process), this
+ * works correctly.
+ *
  * @param request The NextRequest object
  * @param limit The maximum number of requests allowed in the window
  * @param windowMs The window duration in milliseconds (default: 1 minute)

@@ -50,6 +50,15 @@ function LiveTrackingContent({ ownerId, tableNumber }: { ownerId: string, tableN
       return;
     }
 
+    // Ensure this order ID is in localStorage
+    if (typeof window !== 'undefined') {
+      const storedIds = JSON.parse(localStorage.getItem('placedOrderIds') || '[]');
+      if (!storedIds.includes(orderId)) {
+        storedIds.push(orderId);
+        localStorage.setItem('placedOrderIds', JSON.stringify(storedIds));
+      }
+    }
+
     async function fetchStatus() {
       try {
         const res = await fetch(`/api/public/orders/${orderId}`);
@@ -58,6 +67,14 @@ function LiveTrackingContent({ ownerId, tableNumber }: { ownerId: string, tableN
           setOrder(data.data);
           if (data.data.status === 'completed' || data.data.status === 'cancelled') {
             if (intervalRef.current) clearInterval(intervalRef.current);
+            if (data.data.status === 'cancelled') {
+              // Remove cancelled order from tracking
+              if (typeof window !== 'undefined') {
+                const storedIds = JSON.parse(localStorage.getItem('placedOrderIds') || '[]');
+                const filtered = storedIds.filter((id: string) => id !== orderId);
+                localStorage.setItem('placedOrderIds', JSON.stringify(filtered));
+              }
+            }
           }
         }
       } catch (err) {
@@ -102,11 +119,11 @@ function LiveTrackingContent({ ownerId, tableNumber }: { ownerId: string, tableN
       <div className="success-card">
         {/* Status Icon */}
         {isCancelled ? (
-          <div className="success-icon" style={{ background: 'rgba(244,63,94,0.1)', borderColor: '#f43f5e', color: '#f43f5e', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><XCircle size={32} /></div>
+          <div className="success-icon" style={{ background: 'var(--status-cancelled-bg)', borderColor: 'var(--status-cancelled)', color: 'var(--status-cancelled)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><XCircle size={32} /></div>
         ) : currentIndex >= 2 ? (
-          <div className="success-icon" style={{ background: 'rgba(34,197,94,0.1)', borderColor: '#22c55e', color: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CheckCircle2 size={32} /></div>
+          <div className="success-icon" style={{ background: 'var(--status-ready-bg)', borderColor: 'var(--status-ready)', color: 'var(--status-ready)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CheckCircle2 size={32} /></div>
         ) : (
-          <div className="success-icon" style={{ background: 'rgba(249,115,22,0.1)', borderColor: '#f97316', color: '#f97316', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ChefHat size={32} /></div>
+          <div className="success-icon" style={{ background: 'var(--status-preparing-bg)', borderColor: 'var(--status-preparing)', color: 'var(--status-preparing)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ChefHat size={32} /></div>
         )}
 
         <h1 style={{ fontSize: 'clamp(1.35rem, 5vw, 1.75rem)', fontWeight: 800, marginBottom: '0.5rem' }}>
@@ -118,7 +135,7 @@ function LiveTrackingContent({ ownerId, tableNumber }: { ownerId: string, tableN
             ? 'Order Completed'
             : 'Preparing Your Order…'}
         </h1>
-        <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>
+        <p style={{ color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
           {isCancelled
             ? 'Please speak with the staff.'
             : currentStatus === 'ready'
@@ -128,42 +145,42 @@ function LiveTrackingContent({ ownerId, tableNumber }: { ownerId: string, tableN
 
         {/* Live Progress Bar */}
         {!isCancelled && (
-          <div style={{ marginBottom: '2.5rem', width: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>
-              <span style={{ color: currentIndex >= 0 ? 'var(--accent)' : '' }}>Received</span>
-              <span style={{ color: currentIndex >= 1 ? '#f97316' : '' }}>Preparing</span>
-              <span style={{ color: currentIndex >= 2 ? '#22c55e' : '' }}>Ready 🎉</span>
+          <div className="success-progress-container" style={{ marginBottom: '1.5rem', width: '100%' }}>
+            <div className="success-progress-labels" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>
+              <span style={{ color: currentIndex >= 0 ? 'var(--status-pending)' : '' }}>Received</span>
+              <span style={{ color: currentIndex >= 1 ? 'var(--status-preparing)' : '' }}>Preparing</span>
+              <span style={{ color: currentIndex >= 2 ? 'var(--status-ready)' : '' }}>Ready 🎉</span>
             </div>
-            <div style={{ display: 'flex', gap: '0.35rem', height: 10, borderRadius: 99, overflow: 'hidden' }}>
-              <div style={{ flex: 1, borderRadius: 99, background: currentIndex >= 0 ? 'var(--accent)' : 'var(--border)', transition: 'background 0.5s ease' }} />
-              <div style={{ flex: 1, borderRadius: 99, background: currentIndex >= 1 ? '#f97316' : 'var(--border)', transition: 'background 0.5s ease' }} />
-              <div style={{ flex: 1, borderRadius: 99, background: currentIndex >= 2 ? '#22c55e' : 'var(--border)', transition: 'background 0.5s ease' }} />
+            <div className="success-progress-bar" style={{ display: 'flex', gap: '0.35rem', height: 10, borderRadius: 99, overflow: 'hidden' }}>
+              <div style={{ flex: 1, borderRadius: 99, background: currentIndex >= 0 ? 'var(--status-pending)' : 'var(--border)', transition: 'background 0.5s ease' }} />
+              <div style={{ flex: 1, borderRadius: 99, background: currentIndex >= 1 ? 'var(--status-preparing)' : 'var(--border)', transition: 'background 0.5s ease' }} />
+              <div style={{ flex: 1, borderRadius: 99, background: currentIndex >= 2 ? 'var(--status-ready)' : 'var(--border)', transition: 'background 0.5s ease' }} />
             </div>
           </div>
         )}
 
         {/* Order Details */}
-        <div style={{
-          background: 'var(--bg-surface)',
+        <div className="success-details-card" style={{
+          background: 'var(--bg-base)',
           border: '1px solid var(--border)',
           borderRadius: 'var(--radius-md)',
           padding: '1.25rem',
-          marginBottom: '2rem',
+          marginBottom: '1.25rem',
           textAlign: 'left',
           width: '100%',
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem', marginBottom: '0.75rem' }}>
+          <div className="success-details-header" style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem', marginBottom: '0.75rem' }}>
             <div>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Table</div>
-              <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>#{tableNumber}</div>
+              <div className="success-details-val" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>#{tableNumber}</div>
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Est. Time</div>
-              <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>~{order?.estimatedTime || initialTime} min</div>
+              <div className="success-details-val" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>~{order?.estimatedTime || initialTime} min</div>
             </div>
           </div>
 
-          <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+          <div className="success-details-items" style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
             {(order?.items || []).map((item, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span>{item.quantity}× {item.menuItemName}</span>
@@ -171,9 +188,9 @@ function LiveTrackingContent({ ownerId, tableNumber }: { ownerId: string, tableN
             ))}
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
+          <div className="success-details-footer" style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
             <span style={{ fontWeight: 700 }}>Total Paid</span>
-            <span style={{ fontWeight: 800, color: 'var(--accent)', fontSize: '1.1rem' }}>₹{order?.totalAmount || initialTotal}</span>
+            <span className="success-details-total" style={{ fontWeight: 800, color: 'var(--accent)', fontSize: '1.1rem' }}>₹{order?.totalAmount || initialTotal}</span>
           </div>
         </div>
 

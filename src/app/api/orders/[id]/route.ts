@@ -1,6 +1,7 @@
 import prisma from '@/lib/db';
 import { authenticateRequest } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { emitToRestaurant } from '@/lib/socketServer';
 
 const VALID_STATUSES = ['pending', 'preparing', 'ready', 'completed', 'cancelled'];
 
@@ -67,14 +68,16 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        ...updated,
-        totalAmount: parseFloat(updated.totalAmount.toString()),
-        items: updated.items.map(item => ({ ...item, price: parseFloat(item.price.toString()) })),
-      },
-    });
+    const formattedOrder = {
+      ...updated,
+      totalAmount: parseFloat(updated.totalAmount.toString()),
+      items: updated.items.map(item => ({ ...item, price: parseFloat(item.price.toString()) })),
+    };
+
+    // Notify restaurant owner's dashboard in real-time
+    emitToRestaurant(user.id, 'order:updated', formattedOrder);
+
+    return NextResponse.json({ success: true, data: formattedOrder });
   } catch (error) {
     console.error('Update order error:', error);
     return NextResponse.json({ success: false, error: { code: 'SERVER_ERROR', message: 'Failed to update order' } }, { status: 500 });

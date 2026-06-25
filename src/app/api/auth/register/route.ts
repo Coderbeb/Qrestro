@@ -2,9 +2,18 @@ import prisma from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { buildOrderUrl, generateQRCodeDataURL } from '@/lib/qr';
+import { isRateLimited } from '@/lib/rateLimit';
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: max 5 registrations per minute per IP
+    if (isRateLimited(request, 5, 60000)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Too many registration attempts. Please wait a moment.' } },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { restaurantName, ownerName, email, phone, username, password, tableCount } = body;
 
@@ -79,9 +88,10 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    const requestHost = request.headers.get('host');
     const tablePromises = [];
     for (let i = 1; i <= count; i++) {
-      const orderUrl = buildOrderUrl(owner.id, i);
+      const orderUrl = buildOrderUrl(owner.id, i, requestHost);
       tablePromises.push((async () => {
         const qrCodeImageUrl = await generateQRCodeDataURL(orderUrl);
         return {

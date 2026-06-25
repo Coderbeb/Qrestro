@@ -1,7 +1,9 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { ShoppingBag, TrendingUp, Clock, Utensils, QrCode, Package, Inbox, CheckCircle2, ChevronRight } from 'lucide-react';
+import { getAuthHeader } from '@/lib/api';
+import { useSocket } from '@/lib/useSocket';
 
 type Stats = {
   totalOrders: number;
@@ -20,15 +22,19 @@ type RecentOrder = {
   items: { menuItemName: string; quantity: number }[];
 };
 
-function getAuthHeader() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-}
-
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+
+  // Get owner ID from localStorage for Socket.io room
+  useEffect(() => {
+    const stored = localStorage.getItem('owner');
+    if (stored) {
+      try { setOwnerId(JSON.parse(stored).id); } catch { /* ignore */ }
+    }
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -51,6 +57,18 @@ export default function DashboardPage() {
       setLoading(false);
     }
   }, []);
+
+  // Socket.io event handlers
+  const socketListeners = useMemo(() => ({
+    'order:new': () => {
+      load();
+    },
+    'order:updated': () => {
+      load();
+    },
+  }), [load]);
+
+  useSocket(ownerId, socketListeners);
 
   useEffect(() => { load(); }, [load]);
 

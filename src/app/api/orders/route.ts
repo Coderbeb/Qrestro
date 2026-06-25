@@ -2,6 +2,7 @@ import prisma from '@/lib/db';
 import { authenticateRequest } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { isRateLimited } from '@/lib/rateLimit';
+import { emitToRestaurant } from '@/lib/socketServer';
 
 const VALID_STATUSES = ['pending', 'preparing', 'ready', 'completed', 'cancelled'];
 
@@ -114,14 +115,16 @@ export async function POST(request: NextRequest) {
       include: { items: true },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        ...order,
-        totalAmount: parseFloat(order.totalAmount.toString()),
-        items: order.items.map(i => ({ ...i, price: parseFloat(i.price.toString()) })),
-      },
-    }, { status: 201 });
+    const formattedOrder = {
+      ...order,
+      totalAmount: parseFloat(order.totalAmount.toString()),
+      items: order.items.map(i => ({ ...i, price: parseFloat(i.price.toString()) })),
+    };
+
+    // Notify restaurant owner's dashboard in real-time
+    emitToRestaurant(ownerId, 'order:new', formattedOrder);
+
+    return NextResponse.json({ success: true, data: formattedOrder }, { status: 201 });
   } catch (error) {
     console.error('Place order error:', error);
     return NextResponse.json({ success: false, error: { code: 'SERVER_ERROR', message: 'Failed to place order' } }, { status: 500 });

@@ -1,9 +1,18 @@
 import prisma from '@/lib/db';
 import { comparePassword, generateToken } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { isRateLimited } from '@/lib/rateLimit';
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: max 10 login attempts per minute per IP
+    if (isRateLimited(request, 10, 60000)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Too many login attempts. Please wait a moment.' } },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { username, password } = body;
 

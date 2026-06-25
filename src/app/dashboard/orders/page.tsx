@@ -1,6 +1,8 @@
 'use client';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Clock, ChefHat, CheckCircle2, Check, RefreshCw, ShoppingBag, X } from 'lucide-react';
+import { getAuthHeader } from '@/lib/api';
+import { useSocket } from '@/lib/useSocket';
 
 type OrderItem = {
   id: string;
@@ -34,16 +36,19 @@ const NEXT_STATUS: Record<string, string | null> = {
   completed: null,
 };
 
-function getAuthHeader() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-}
-
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+
+  // Get owner ID from localStorage for Socket.io room
+  useEffect(() => {
+    const stored = localStorage.getItem('owner');
+    if (stored) {
+      try { setOwnerId(JSON.parse(stored).id); } catch { /* ignore */ }
+    }
+  }, []);
 
   const loadOrders = useCallback(async () => {
     try {
@@ -53,12 +58,22 @@ export default function OrdersPage() {
     } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => {
-    loadOrders();
-    // Poll every 5 seconds for new orders
-    intervalRef.current = setInterval(loadOrders, 5000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [loadOrders]);
+  // Socket.io event handlers
+  const socketListeners = useMemo(() => ({
+    'order:new': (data: unknown) => {
+      const newOrder = data as Order;
+      setOrders(prev => [newOrder, ...prev.filter(o => o.id !== newOrder.id)]);
+    },
+    'order:updated': (data: unknown) => {
+      const updated = data as Order;
+      setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
+    },
+  }), []);
+
+  useSocket(ownerId, socketListeners);
+
+  // Initial fetch only — no polling
+  useEffect(() => { loadOrders(); }, [loadOrders]);
 
   async function advanceStatus(order: Order) {
     const next = NEXT_STATUS[order.status];
@@ -110,7 +125,7 @@ export default function OrdersPage() {
         <div>
           <span className="page-header-pretitle">Real-Time Monitor</span>
           <h1>Live Orders</h1>
-          <p>{activeOrders.filter(o => o.status !== 'completed').length} active · auto-refreshes every 5s</p>
+          <p>{activeOrders.filter(o => o.status !== 'completed').length} active · real-time updates</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--status-ready)', animation: 'pulse-glow 2s ease infinite' }} />

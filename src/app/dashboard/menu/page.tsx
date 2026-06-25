@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
 import { Folder, Utensils, Trash2, Clock, Plus, ArrowLeft, Edit, Layers } from 'lucide-react';
+import { getAuthHeader } from '@/lib/api';
 
 type Category = {
   id: string;
@@ -31,11 +32,6 @@ const emptyItemForm: ItemForm = {
   name: '', description: '', price: '', preparationTime: '15',
   isAvailable: true, imageUrl: '', categoryId: '',
 };
-
-function getAuthHeader() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-}
 
 export default function MenuPage() {
   const [tab, setTab] = useState<'items' | 'categories'>('items');

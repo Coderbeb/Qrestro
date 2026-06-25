@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { Store, Lock } from 'lucide-react';
+import { getAuthHeader } from '@/lib/api';
 
 type Owner = {
   id: string;
@@ -12,11 +13,6 @@ type Owner = {
   cuisine: string | null;
   createdAt: string;
 };
-
-function getAuthHeader() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-}
 
 export default function SettingsPage() {
   const [owner, setOwner] = useState<Owner | null>(null);

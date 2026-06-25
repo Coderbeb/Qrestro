@@ -1,12 +1,23 @@
 'use client';
-import { useEffect, useState, useCallback, useRef, use } from 'react';
+import { useEffect, useState, useCallback, useRef, use, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sun, Moon, ShoppingBag, Utensils, Clock, X } from 'lucide-react';
+import { useSocket } from '@/lib/useSocket';
 
 type MenuItem = { id: string; name: string; description: string | null; price: number; imageUrl: string | null; preparationTime: number; categoryId: string | null; };
 type Category = { id: string; name: string; sortOrder: number; items: MenuItem[]; };
 type CartItem = { menuItem: MenuItem; quantity: number; };
 type Restaurant = { id: string; restaurantName: string | null; };
+type OrderStatus = {
+  id: string;
+  status: string;
+  totalAmount: number;
+  estimatedTime: number;
+  tableNumber: number;
+  items: { menuItemName: string; quantity: number }[];
+};
+
+const STATUS_STEPS = ['pending', 'preparing', 'ready', 'completed'];
 
 export default function OrderPage({ params }: { params: Promise<{ ownerId: string; tableNumber: string }> }) {
   const { ownerId, tableNumber } = use(params);
@@ -23,18 +34,116 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
   const [showCart, setShowCart] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('all');
   const [isDark, setIsDark] = useState(false);
+  const [liveOrders, setLiveOrders] = useState<OrderStatus[]>([]);
+  const [showTracking, setShowTracking] = useState(false);
   const tabBarRef = useRef<HTMLDivElement>(null);
+
+  // Load tracked orders from localStorage and check their live status
+  const loadTrackedOrders = useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    const storedIds = JSON.parse(localStorage.getItem('placedOrderIds') || '[]');
+    if (storedIds.length === 0) {
+      setLiveOrders([]);
+      return;
+    }
+    
+    try {
+      const results = await Promise.all(
+        storedIds.map(async (id: string) => {
+          try {
+            const res = await fetch(`/api/public/orders/${id}`);
+            const data = await res.json();
+            return data.success ? data.data : null;
+          } catch {
+            return null;
+          }
+        })
+      );
+      
+      const active = results.filter((o): o is OrderStatus => 
+        o !== null && o.status !== 'cancelled'
+      );
+      
+      setLiveOrders(active);
+      
+      // Reset tracking session for new customer if all tracked orders are marked completed
+      const allCompleted = active.length > 0 && active.every(o => o.status === 'completed');
+      if (allCompleted) {
+        localStorage.setItem('placedOrderIds', JSON.stringify([]));
+      } else {
+        const activeIds = active.map(o => o.id);
+        localStorage.setItem('placedOrderIds', JSON.stringify(activeIds));
+      }
+    } catch (err) {
+      console.error('Error loading tracked orders:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTrackedOrders();
+  }, [loadTrackedOrders]);
+
+  const socketListeners = useMemo(() => ({
+    'order:updated': (data: unknown) => {
+      const updatedOrder = data as { id: string; status: string };
+      if (!updatedOrder || !updatedOrder.id) return;
+      
+      setLiveOrders(prev => {
+        const orderExists = prev.some(o => o.id === updatedOrder.id);
+        if (!orderExists) return prev;
+
+        const updated = prev.map(o => o.id === updatedOrder.id ? { ...o, status: updatedOrder.status } : o);
+        const filtered = updated.filter(o => o.status !== 'cancelled');
+
+        // Reset tracking session for new customer if all tracked orders are marked completed
+        const allCompleted = filtered.length > 0 && filtered.every(o => o.status === 'completed');
+        if (allCompleted || filtered.length === 0) {
+          localStorage.setItem('placedOrderIds', JSON.stringify([]));
+        } else {
+          const activeIds = filtered.map(o => o.id);
+          localStorage.setItem('placedOrderIds', JSON.stringify(activeIds));
+        }
+
+        return filtered;
+      });
+    },
+    'order:new': (data: unknown) => {
+      const newOrder = data as OrderStatus;
+      if (!newOrder || !newOrder.id) return;
+      
+      const storedIds = JSON.parse(localStorage.getItem('placedOrderIds') || '[]');
+      if (storedIds.includes(newOrder.id)) {
+        setLiveOrders(prev => {
+          if (prev.some(o => o.id === newOrder.id)) return prev;
+          return [...prev, newOrder];
+        });
+      }
+    }
+  }), []);
+
+  useSocket(ownerId, socketListeners);
 
   useEffect(() => {
     const saved = localStorage.getItem('theme');
-    setIsDark(saved === 'dark');
+    if (saved === 'dark') {
+      setIsDark(true);
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      setIsDark(false);
+      document.documentElement.removeAttribute('data-theme');
+    }
   }, []);
 
   function toggleTheme() {
-    const newDark = !isDark;
-    setIsDark(newDark);
-    if (newDark) { document.documentElement.setAttribute('data-theme', 'dark'); localStorage.setItem('theme', 'dark'); }
-    else { document.documentElement.removeAttribute('data-theme'); localStorage.setItem('theme', 'light'); }
+    const nextTheme = !isDark;
+    setIsDark(nextTheme);
+    if (nextTheme) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+      localStorage.setItem('theme', 'light');
+    }
   }
 
   const loadMenu = useCallback(async () => {
@@ -53,8 +162,9 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
   useEffect(() => { loadMenu(); }, [loadMenu]);
 
   function addToCart(item: MenuItem) {
-    setCart(prev => { const next = new Map(prev); const ex = next.get(item.id); next.set(item.id, { menuItem: item, quantity: (ex?.quantity || 0) + 1 }); return next; });
+    setCart(prev => { const next = new Map(prev); const ex = next.get(item.id); if (ex) next.set(item.id, { ...ex, quantity: ex.quantity + 1 }); else next.set(item.id, { menuItem: item, quantity: 1 }); return next; });
   }
+
   function removeFromCart(itemId: string) {
     setCart(prev => { const next = new Map(prev); const ex = next.get(itemId); if (!ex) return prev; if (ex.quantity <= 1) next.delete(itemId); else next.set(itemId, { ...ex, quantity: ex.quantity - 1 }); return next; });
   }
@@ -70,6 +180,14 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
       const res = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ownerId, tableNumber: parseInt(tableNumber), items: cartItems.map(c => ({ menuItemId: c.menuItem.id, quantity: c.quantity })) }) });
       const data = await res.json();
       if (!data.success) { alert(data.error?.message || 'Failed to place order'); return; }
+      
+      // Store the placed order ID
+      const storedIds = JSON.parse(localStorage.getItem('placedOrderIds') || '[]');
+      if (!storedIds.includes(data.data.id)) {
+        storedIds.push(data.data.id);
+        localStorage.setItem('placedOrderIds', JSON.stringify(storedIds));
+      }
+      
       router.push(`/order/${ownerId}/${tableNumber}/success?orderId=${data.data.id}&total=${cartTotal.toFixed(2)}&time=${data.data.estimatedTime}`);
     } finally { setPlacing(false); }
   }
@@ -99,6 +217,15 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
           <button className="btn btn-ghost btn-icon" onClick={toggleTheme} aria-label="Toggle theme" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{isDark ? <Sun size={18} /> : <Moon size={18} />}</button>
+          {liveOrders.length > 0 && (
+            <button
+              id="track-orders-btn"
+              className="btn btn-sm btn-track-orders"
+              onClick={() => setShowTracking(true)}
+            >
+              <Clock size={14} className="pulse-icon" /> Track Orders ({liveOrders.length})
+            </button>
+          )}
           {cartCount > 0 && <button id="view-cart-btn" className="btn btn-primary btn-sm" onClick={() => setShowCart(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><ShoppingBag size={14} /> {cartCount}</button>}
         </div>
       </header>
@@ -129,7 +256,7 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
             const qty = cart.get(item.id)?.quantity || 0;
             return (
               <div key={item.id} className="order-item-card">
-                <div className="order-item-img" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.imageUrl ? <img src={item.imageUrl} alt={item.name} /> : <Utensils size={24} style={{ color: 'var(--text-muted)' }} />}</div>
+                <div className="order-item-img">{item.imageUrl ? <img src={item.imageUrl} alt={item.name} /> : <Utensils size={24} style={{ color: 'var(--text-muted)' }} />}</div>
                 <div className="order-item-body">
                   <div className="order-item-name">{item.name}</div>
                   {item.description && <div className="order-item-desc">{item.description}</div>}
@@ -191,6 +318,63 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
             <button id="place-order-btn" className="btn btn-primary btn-full btn-lg" onClick={placeOrder} disabled={placing} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
               {placing ? <><span className="spinner" style={{ width: 18, height: 18 }} /> Placing Order…</> : <><ShoppingBag size={18} /> Place Order</>}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Tracking modal */}
+      {showTracking && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowTracking(false)}>
+          <div className="modal-box" style={{ maxWidth: 440 }}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Clock size={20} style={{ color: 'var(--status-pending)' }} /> Orders ({liveOrders.length})
+              </h3>
+              <button className="btn btn-ghost btn-icon" onClick={() => setShowTracking(false)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
+            </div>
+             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '55vh', overflowY: 'auto', paddingRight: '4px' }}>
+              {liveOrders.map(order => {
+                const isCancelled = order.status === 'cancelled';
+                const currentIndex = STATUS_STEPS.indexOf(order.status);
+                return (
+                  <div key={order.id} className="order-tracking-card">
+                    <div className="order-tracking-header">
+                      <span style={{ fontWeight: 700, fontSize: '0.825rem' }}>Order #{order.id.slice(-4).toUpperCase()}</span>
+                      <span className={`badge badge-${order.status}`} style={{ textTransform: 'capitalize', fontSize: '0.675rem', padding: '0.1rem 0.4rem' }}>
+                        {order.status}
+                      </span>
+                    </div>
+                    
+                    <div className="order-tracking-body">
+                      {/* Progress indicator */}
+                      {!isCancelled && (
+                        <div style={{ margin: '0.5rem 0' }}>
+                          <div style={{ display: 'flex', gap: '0.35rem', height: 5, borderRadius: 99, overflow: 'hidden' }}>
+                            <div style={{ flex: 1, borderRadius: 99, background: currentIndex >= 0 ? 'var(--status-pending)' : 'var(--border)', transition: 'background 0.5s ease' }} />
+                            <div style={{ flex: 1, borderRadius: 99, background: currentIndex >= 1 ? 'var(--status-preparing)' : 'var(--border)', transition: 'background 0.5s ease' }} />
+                            <div style={{ flex: 1, borderRadius: 99, background: currentIndex >= 2 ? 'var(--status-ready)' : 'var(--border)', transition: 'background 0.5s ease' }} />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Items */}
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.2rem', marginTop: '0.4rem' }}>
+                        {order.items.map((item, index) => (
+                          <div key={index} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span>{item.quantity}× {item.menuItemName}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border)', marginTop: '0.5rem', paddingTop: '0.4rem', fontSize: '0.78rem' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Est. Time: ~{order.estimatedTime} min</span>
+                        <span style={{ fontWeight: 700, color: 'var(--accent)' }}>₹{parseFloat(order.totalAmount.toString()).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

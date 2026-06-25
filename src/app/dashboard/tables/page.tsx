@@ -1,14 +1,11 @@
 'use client';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { Plus, MoreVertical, Eye, Download, ExternalLink, Copy, RefreshCw, Pause, Play, Trash2, Utensils, QrCode, X, Sparkles } from 'lucide-react';
+import { getAuthHeader } from '@/lib/api';
+import { useSocket } from '@/lib/useSocket';
 
 type Table = { id: string; tableNumber: number; qrCodeImageUrl: string | null; qrCodeData: string; isActive: boolean; };
 type Order = { id: string; tableNumber: number; status: string; };
-
-function getAuthHeader() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-}
 
 /** Draws a branded QR image on a canvas and triggers download */
 async function downloadBrandedQR(qrUrl: string, tableNumber: number, restaurantName: string) {
@@ -93,13 +90,17 @@ export default function TablesPage() {
   const [viewQR, setViewQR] = useState<Table | null>(null);
   const [restaurantName, setRestaurantName] = useState('My Restaurant');
   const [brandDownloading, setBrandDownloading] = useState<string | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [ownerId, setOwnerId] = useState<string | null>(null);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
   useEffect(() => {
     const stored = localStorage.getItem('owner');
-    if (stored) { const p = JSON.parse(stored); setRestaurantName(p.restaurantName || p.username || 'My Restaurant'); }
+    if (stored) {
+      const p = JSON.parse(stored);
+      setRestaurantName(p.restaurantName || p.username || 'My Restaurant');
+      setOwnerId(p.id || null);
+    }
   }, []);
 
   useEffect(() => {
@@ -118,11 +119,27 @@ export default function TablesPage() {
     } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => {
-    loadData();
-    intervalRef.current = setInterval(loadData, 5000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [loadData]);
+  // Refresh only the orders list (tables don't change via Socket.io)
+  const refreshOrders = useCallback(async () => {
+    try {
+      const res = await fetch('/api/orders?limit=100', { headers: getAuthHeader() });
+      const data = await res.json();
+      if (data.success) setOrders(data.data);
+    } catch { /* ignore */ }
+  }, []);
+
+  // Socket.io: re-fetch orders when any order event arrives
+  const socketListeners = useMemo(() => ({
+    'order:new': () => {
+      refreshOrders();
+    },
+    'order:updated': () => refreshOrders(),
+  }), [refreshOrders]);
+
+  useSocket(ownerId, socketListeners);
+
+  // Initial fetch only — no polling
+  useEffect(() => { loadData(); }, [loadData]);
 
   async function handleAdd() {
     if (!newTableNum || parseInt(newTableNum) < 1) { showToast('Enter a valid table number'); return; }

@@ -1,5 +1,5 @@
 'use client';
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import Link from 'next/link';
 import { Utensils, Eye, EyeOff } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -10,6 +10,40 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token');
+      const ownerStr = localStorage.getItem('owner');
+      if (token && ownerStr) {
+        try {
+          const owner = JSON.parse(ownerStr);
+          if (owner && owner.role === 'SUPER_ADMIN') {
+            router.replace('/superadmin');
+            return;
+          } else if (owner) {
+            router.replace('/dashboard');
+            return;
+          }
+        } catch {
+          // Clear corrupted localStorage
+          localStorage.removeItem('token');
+          localStorage.removeItem('owner');
+        }
+      }
+    }
+    setCheckingAuth(false);
+  }, [router]);
+
+  if (checkingAuth) {
+    return (
+      <div className="loading-center" style={{ minHeight: '100vh' }}>
+        <div className="spinner" style={{ width: 40, height: 40 }} />
+        <span>Verifying session…</span>
+      </div>
+    );
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
