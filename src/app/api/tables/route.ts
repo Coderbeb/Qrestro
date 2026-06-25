@@ -3,6 +3,8 @@ import { authenticateRequest } from '@/lib/auth';
 import { buildOrderUrl, generateQRCodeDataURL } from '@/lib/qr';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { getTableSignature } from '@/lib/security';
+
 export async function GET(request: NextRequest) {
   const user = authenticateRequest(request);
   if (!user) return NextResponse.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
@@ -13,13 +15,26 @@ export async function GET(request: NextRequest) {
       orderBy: { tableNumber: 'asc' },
     });
 
-    // Auto-repair any tables with incorrect JSON formatting or missing QR code images
+    // Auto-repair any tables with incorrect JSON formatting, missing QR code images, or missing/invalid signatures
     const requestHost = request.headers.get('host');
     for (const table of tables) {
       const isJson = table.qrCodeData && (table.qrCodeData.startsWith('{') || table.qrCodeData.startsWith('['));
-      // Also repair if the stored URL points to localhost (leftover from local dev)
       const isLocalhost = table.qrCodeData && table.qrCodeData.includes('localhost');
-      if (!table.qrCodeData || isJson || !table.qrCodeImageUrl || isLocalhost) {
+      
+      let hasValidSignature = false;
+      if (table.qrCodeData && !isJson && !isLocalhost) {
+        try {
+          const urlObj = new URL(table.qrCodeData);
+          const code = urlObj.searchParams.get('code');
+          if (code === getTableSignature(user.id, table.tableNumber)) {
+            hasValidSignature = true;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (!table.qrCodeData || isJson || !table.qrCodeImageUrl || isLocalhost || !hasValidSignature) {
         const orderUrl = buildOrderUrl(user.id, table.tableNumber, requestHost);
         const qrCodeImageUrl = await generateQRCodeDataURL(orderUrl);
 

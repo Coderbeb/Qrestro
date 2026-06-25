@@ -1102,6 +1102,9 @@ input::-ms-clear {
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
 .loading-center {
   display: flex;
   flex-direction: column;
@@ -1110,6 +1113,25 @@ input::-ms-clear {
   gap: 1.25rem;
   min-height: 240px;
   color: var(--text-muted);
+}
+
+/* ─── Grid System ───────────────────────────────────────────── */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  width: 100%;
+}
+@media (min-width: 576px) {
+  .grid-2 { grid-template-columns: repeat(2, 1fr) !important; }
+  .grid-3 { grid-template-columns: repeat(2, 1fr) !important; }
+  .grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
+}
+@media (min-width: 768px) {
+  .grid-3 { grid-template-columns: repeat(3, 1fr) !important; }
+  .grid-4 { grid-template-columns: repeat(3, 1fr) !important; }
+}
+@media (min-width: 992px) {
+  .grid-4 { grid-template-columns: repeat(4, 1fr) !important; }
 }
 
 /* ─── Notification / Toast ──────────────────────────────────── */

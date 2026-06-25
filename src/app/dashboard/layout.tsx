@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { LayoutDashboard, UtensilsCrossed, QrCode, ShoppingBag, Settings, LogOut, Sun, Moon, Lock, Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, UtensilsCrossed, QrCode, ShoppingBag, Settings, LogOut, Sun, Moon, Lock, Eye, EyeOff, ChevronLeft, ChevronRight, CreditCard, TrendingUp } from 'lucide-react';
 import { useSocket } from '@/lib/useSocket';
 import { playNotificationSound } from '@/lib/audio';
 
@@ -11,6 +11,8 @@ const NAV_ITEMS = [
   { href: '/dashboard/menu', label: 'Menu', icon: <UtensilsCrossed size={18} />, id: 'menu' },
   { href: '/dashboard/tables', label: 'Tables & QR', icon: <QrCode size={18} />, id: 'tables' },
   { href: '/dashboard/orders', label: 'Orders', icon: <ShoppingBag size={18} />, id: 'orders' },
+  { href: '/dashboard/billing', label: 'Billing', icon: <CreditCard size={18} />, id: 'billing' },
+  { href: '/dashboard/reports', label: 'Reports', icon: <TrendingUp size={18} />, id: 'reports' },
   { href: '/dashboard/settings', label: 'Settings', icon: <Settings size={18} />, id: 'settings' },
 ];
 

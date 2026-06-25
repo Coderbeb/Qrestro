@@ -26,7 +26,6 @@ const COLUMNS = [
   { status: 'pending',   label: 'Pending',   icon: Clock, color: 'var(--status-pending)' },
   { status: 'preparing', label: 'Preparing', icon: ChefHat, color: 'var(--status-preparing)' },
   { status: 'ready',     label: 'Ready',     icon: CheckCircle2, color: 'var(--status-ready)' },
-  { status: 'completed', label: 'Completed', icon: Check, color: 'var(--status-completed)' },
 ];
 
 const NEXT_STATUS: Record<string, string | null> = {
@@ -39,6 +38,7 @@ const NEXT_STATUS: Record<string, string | null> = {
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [updating, setUpdating] = useState<string | null>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null);
 
@@ -55,7 +55,10 @@ export default function OrdersPage() {
       const res = await fetch('/api/orders?limit=100', { headers: getAuthHeader() });
       const data = await res.json();
       if (data.success) setOrders(data.data);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
 
   // Socket.io event handlers
@@ -105,7 +108,7 @@ export default function OrdersPage() {
     } finally { setUpdating(null); }
   }
 
-  const activeOrders = orders.filter(o => o.status !== 'cancelled');
+  const activeOrders = orders.filter(o => o.status !== 'cancelled' && o.status !== 'completed');
   const cancelledOrders = orders.filter(o => o.status === 'cancelled');
 
   function timeSince(dateStr: string) {
@@ -130,8 +133,14 @@ export default function OrdersPage() {
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--status-ready)', animation: 'pulse-glow 2s ease infinite' }} />
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Live</span>
-          <button id="refresh-orders-btn" className="btn btn-ghost btn-sm" onClick={loadOrders} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-            <RefreshCw size={14} /> Refresh
+          <button 
+            id="refresh-orders-btn" 
+            className="btn btn-ghost btn-sm" 
+            onClick={() => { setRefreshing(true); loadOrders(); }} 
+            disabled={refreshing}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+          >
+            <RefreshCw size={14} className={refreshing ? 'spin-icon' : ''} /> {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
       </div>
@@ -167,19 +176,54 @@ export default function OrdersPage() {
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', padding: '1rem 0' }}>Empty</p>
                   )}
                   {colOrders.map(order => (
-                    <div key={order.id} className="order-card animate-fade-in">
-                      <div className="order-card-header">
-                        <div>
-                          <strong style={{ fontSize: '0.9rem' }}>Table {order.tableNumber}</strong>
-                          <div className="order-card-table">{timeSince(order.createdAt)}</div>
+                    <div key={order.id} className="order-card animate-fade-in" style={{ padding: '1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                      <div className="order-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light, var(--border))', paddingBottom: '0.6rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                          <span style={{
+                            background: 'var(--accent-glow)',
+                            color: 'var(--accent)',
+                            fontSize: '1.15rem',
+                            fontWeight: 800,
+                            padding: '0.2rem 0.5rem',
+                            borderRadius: 'var(--radius-sm)',
+                            border: '1px solid var(--accent)',
+                            lineHeight: '1.2'
+                          }}>
+                            T {order.tableNumber}
+                          </span>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                            {timeSince(order.createdAt)}
+                          </span>
                         </div>
-                        <div className="order-card-total">₹{order.totalAmount.toFixed(2)}</div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)' }}>
+                          ₹{order.totalAmount.toFixed(2)}
+                        </div>
                       </div>
-                      <div className="order-card-items">
-                        {order.items.map(i => `${i.menuItemName} ×${i.quantity}`).join(' · ')}
+
+                      {/* Line-by-line item lists with highlighted quantities */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', margin: '0.2rem 0' }}>
+                        {order.items.map((i, idx) => (
+                          <div key={idx} style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center' }}>
+                            <span style={{ 
+                              color: 'var(--accent)', 
+                              fontWeight: 800, 
+                              marginRight: '0.45rem', 
+                              background: 'var(--accent-glow)', 
+                              padding: '0.05rem 0.3rem', 
+                              borderRadius: 'var(--radius-sm)',
+                              fontSize: '0.825rem'
+                            }}>
+                              {i.quantity}x
+                            </span>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {i.menuItemName}
+                            </span>
+                          </div>
+                        ))}
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-                        ⏱ Est. {order.estimatedTime} min
+
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>⏱ Est. {order.estimatedTime} min</span>
                       </div>
                       <div className="order-card-actions">
                         {NEXT_STATUS[order.status] && (
@@ -190,10 +234,10 @@ export default function OrdersPage() {
                             onClick={() => advanceStatus(order)}
                             disabled={updating === order.id}
                           >
-                            {updating === order.id ? '…' : `→ ${COLUMNS.find(c => c.status === NEXT_STATUS[order.status])?.label}`}
+                            {updating === order.id ? '…' : `→ ${NEXT_STATUS[order.status] === 'completed' ? 'Completed' : (COLUMNS.find(c => c.status === NEXT_STATUS[order.status])?.label || '')}`}
                           </button>
                         )}
-                        {order.status !== 'completed' && (
+                        {order.status === 'pending' && (
                           <button
                             id={`cancel-${order.id}`}
                             className="btn btn-danger btn-sm btn-icon"

@@ -31,14 +31,27 @@ export async function GET(
         estimatedTime: true,
         tableNumber: true,
         createdAt: true,
+        ownerId: true,
         items: {
-          select: { menuItemName: true, quantity: true }
+          select: { menuItemName: true, quantity: true, price: true }
         }
       }
     });
 
     if (!order) {
       return NextResponse.json({ success: false, error: { message: 'Order not found' } }, { status: 404 });
+    }
+
+    // Check if the order was placed before the table's last reset/touch time
+    const table = await prisma.table.findFirst({
+      where: { ownerId: order.ownerId, tableNumber: order.tableNumber }
+    });
+
+    if (table && order.createdAt <= table.updatedAt) {
+      return NextResponse.json({
+        success: false,
+        error: { code: 'SESSION_RESET', message: 'This table session has been settled and cleared.' }
+      }, { status: 410 });
     }
 
     return NextResponse.json({ success: true, data: order });

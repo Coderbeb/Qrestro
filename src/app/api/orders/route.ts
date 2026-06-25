@@ -3,6 +3,7 @@ import { authenticateRequest } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { isRateLimited } from '@/lib/rateLimit';
 import { emitToRestaurant } from '@/lib/socketServer';
+import { getTableSignature } from '@/lib/security';
 
 const VALID_STATUSES = ['pending', 'preparing', 'ready', 'completed', 'cancelled'];
 
@@ -59,19 +60,24 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { ownerId, tableNumber, items } = body;
+    const { ownerId, tableNumber, items, sessionToken } = body;
 
     if (!ownerId || !tableNumber || !items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ success: false, error: { code: 'MISSING_FIELDS', message: 'ownerId, tableNumber and items are required' } }, { status: 400 });
     }
 
-    // Validate owner exists
-    const owner = await prisma.owner.findUnique({ where: { id: ownerId } });
-    if (!owner) return NextResponse.json({ success: false, error: { code: 'NOT_FOUND', message: 'Restaurant not found' } }, { status: 404 });
-
     // Validate table belongs to owner
     const table = await prisma.table.findFirst({ where: { ownerId, tableNumber: parseInt(tableNumber), isActive: true } });
     if (!table) return NextResponse.json({ success: false, error: { code: 'NOT_FOUND', message: 'Table not found or inactive' } }, { status: 404 });
+
+    // Verify table session token to prevent URL tampering and ordering after reset (e.g. from home)
+    const { verifySessionToken } = require('@/lib/security');
+    if (!sessionToken || !verifySessionToken(sessionToken, table.updatedAt)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'SESSION_EXPIRED', message: 'Access Denied: Session expired or invalid. Please scan the QR code on your table to place orders.' } },
+        { status: 403 }
+      );
+    }
 
     // Validate menu items and calculate totals
     const menuItemIds: string[] = items.map((item: { menuItemId: string }) => item.menuItemId);

@@ -21,6 +21,8 @@ export async function generateQRCodeSVG(data: string): Promise<string> {
   });
 }
 
+import { getTableSignature } from './security';
+
 /**
  * Builds the customer-facing order URL.
  * Priority: NEXT_PUBLIC_APP_URL env var → runtime host from request headers.
@@ -28,18 +30,21 @@ export async function generateQRCodeSVG(data: string): Promise<string> {
  * correct domain is used even when the env variable is not set.
  */
 export function buildOrderUrl(ownerId: string, tableNumber: number, requestHost?: string | null): string {
+  const signature = getTableSignature(ownerId, tableNumber);
+  const path = `/order/${ownerId}/${tableNumber}?code=${signature}`;
+
   // 1. Explicit env variable (set this in Vercel project settings)
   if (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes('localhost')) {
-    return `${process.env.NEXT_PUBLIC_APP_URL}/order/${ownerId}/${tableNumber}`;
+    return `${process.env.NEXT_PUBLIC_APP_URL}${path}`;
   }
 
   // 2. Derive from the incoming request host header at runtime
   if (requestHost) {
     const protocol = requestHost.includes('localhost') ? 'http' : 'https';
-    return `${protocol}://${requestHost}/order/${ownerId}/${tableNumber}`;
+    return `${protocol}://${requestHost}${path}`;
   }
 
   // 3. Fallback to env variable as-is (may be localhost in dev)
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  return `${appUrl}/order/${ownerId}/${tableNumber}`;
+  return `${appUrl}${path}`;
 }

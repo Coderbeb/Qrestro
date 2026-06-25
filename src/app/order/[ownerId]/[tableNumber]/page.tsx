@@ -14,7 +14,7 @@ type OrderStatus = {
   totalAmount: number;
   estimatedTime: number;
   tableNumber: number;
-  items: { menuItemName: string; quantity: number }[];
+  items: { menuItemName: string; quantity: number; price?: number }[];
 };
 
 const STATUS_STEPS = ['pending', 'preparing', 'ready', 'completed'];
@@ -53,6 +53,11 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
           try {
             const res = await fetch(`/api/public/orders/${id}`);
             const data = await res.json();
+            
+            // If the order has been reset/cleared from the table session, remove it
+            if (!data.success && data.error?.code === 'SESSION_RESET') {
+              return { id, isExpired: true };
+            }
             return data.success ? data.data : null;
           } catch {
             return null;
@@ -60,20 +65,26 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
         })
       );
       
-      const active = results.filter((o): o is OrderStatus => 
-        o !== null && o.status !== 'cancelled'
-      );
+      // Filter out nulls and expired ones, and clean up expired IDs from localStorage
+      const expiredIds = results.filter(r => r && r.isExpired).map(r => r.id);
+      if (expiredIds.length > 0) {
+        const stored = JSON.parse(localStorage.getItem('placedOrderIds') || '[]');
+        const updated = stored.filter((id: string) => !expiredIds.includes(id));
+        localStorage.setItem('placedOrderIds', JSON.stringify(updated));
+      }
+
+      const active = results.filter((o): o is any => 
+        o !== null && !o.isExpired && o.status !== 'cancelled'
+      ).map(o => ({
+        ...o,
+        totalAmount: parseFloat(o.totalAmount.toString()),
+        items: o.items.map((i: any) => ({
+          ...i,
+          price: parseFloat(i.price.toString())
+        }))
+      }));
       
       setLiveOrders(active);
-      
-      // Reset tracking session for new customer if all tracked orders are marked completed
-      const allCompleted = active.length > 0 && active.every(o => o.status === 'completed');
-      if (allCompleted) {
-        localStorage.setItem('placedOrderIds', JSON.stringify([]));
-      } else {
-        const activeIds = active.map(o => o.id);
-        localStorage.setItem('placedOrderIds', JSON.stringify(activeIds));
-      }
     } catch (err) {
       console.error('Error loading tracked orders:', err);
     }
@@ -94,16 +105,6 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
 
         const updated = prev.map(o => o.id === updatedOrder.id ? { ...o, status: updatedOrder.status } : o);
         const filtered = updated.filter(o => o.status !== 'cancelled');
-
-        // Reset tracking session for new customer if all tracked orders are marked completed
-        const allCompleted = filtered.length > 0 && filtered.every(o => o.status === 'completed');
-        if (allCompleted || filtered.length === 0) {
-          localStorage.setItem('placedOrderIds', JSON.stringify([]));
-        } else {
-          const activeIds = filtered.map(o => o.id);
-          localStorage.setItem('placedOrderIds', JSON.stringify(activeIds));
-        }
-
         return filtered;
       });
     },
@@ -115,11 +116,29 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
       if (storedIds.includes(newOrder.id)) {
         setLiveOrders(prev => {
           if (prev.some(o => o.id === newOrder.id)) return prev;
-          return [...prev, newOrder];
+          return [...prev, {
+            ...newOrder,
+            totalAmount: parseFloat(newOrder.totalAmount.toString()),
+            items: newOrder.items.map((i: any) => ({
+              ...i,
+              price: parseFloat(i.price.toString())
+            }))
+          }];
         });
       }
+    },
+    'table:reset': (data: unknown) => {
+      const payload = data as { tableNumber: number };
+      if (payload && payload.tableNumber === parseInt(tableNumber)) {
+        setLiveOrders([]);
+        localStorage.setItem('placedOrderIds', JSON.stringify([]));
+        setShowTracking(false);
+        const storageKey = `sessionToken_${ownerId}_${tableNumber}`;
+        sessionStorage.removeItem(storageKey);
+        setError('Dining session has expired. Please scan the table QR code again to start a new session.');
+      }
     }
-  }), []);
+  }), [tableNumber, ownerId]);
 
   useSocket(ownerId, socketListeners);
 
@@ -148,16 +167,57 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
 
   const loadMenu = useCallback(async () => {
     try {
-      const res = await fetch(`/api/public/menu?ownerId=${ownerId}`);
+      if (typeof window === 'undefined') return;
+      
+      const searchParams = new URLSearchParams(window.location.search);
+      const code = searchParams.get('code');
+      
+      const storageKey = `sessionToken_${ownerId}_${tableNumber}`;
+      let sessionToken = sessionStorage.getItem(storageKey);
+
+      let url = `/api/public/menu?ownerId=${ownerId}&tableNumber=${tableNumber}`;
+      if (code) {
+        url += `&code=${code}`;
+      } else if (sessionToken) {
+        url += `&sessionToken=${sessionToken}`;
+      } else {
+        setError('Access Denied: Please scan the QR code on your table to view the menu.');
+        setLoading(false);
+        return;
+      }
+
+      const res = await fetch(url);
       const data = await res.json();
-      if (!data.success) { setError('Restaurant not found'); return; }
+      
+      if (!data.success) {
+        if (data.error?.code === 'SESSION_EXPIRED') {
+          sessionStorage.removeItem(storageKey);
+          localStorage.setItem('placedOrderIds', JSON.stringify([]));
+        }
+        setError(data.error?.message || 'Access Denied: Please scan the QR code on your table.');
+        return;
+      }
+
+      // Store the session token
+      if (data.data.sessionToken) {
+        sessionStorage.setItem(storageKey, data.data.sessionToken);
+      }
+
+      // Clean the URL query params so they can't reload or bookmark the code param from browser history
+      if (code) {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+
       setRestaurant(data.data.restaurant);
       setCategories(data.data.categories || []);
       setUncategorized(data.data.uncategorized || []);
       setAllItems(data.data.items || []);
-    } catch { setError('Failed to load menu'); }
-    finally { setLoading(false); }
-  }, [ownerId]);
+    } catch {
+      setError('Failed to load menu');
+    } finally {
+      setLoading(false);
+    }
+  }, [ownerId, tableNumber]);
 
   useEffect(() => { loadMenu(); }, [loadMenu]);
 
@@ -177,9 +237,29 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
     if (!cartItems.length) return;
     setPlacing(true);
     try {
-      const res = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ownerId, tableNumber: parseInt(tableNumber), items: cartItems.map(c => ({ menuItemId: c.menuItem.id, quantity: c.quantity })) }) });
+      const storageKey = `sessionToken_${ownerId}_${tableNumber}`;
+      const sessionToken = typeof window !== 'undefined' ? sessionStorage.getItem(storageKey) : null;
+      
+      const res = await fetch('/api/orders', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ 
+          ownerId, 
+          tableNumber: parseInt(tableNumber), 
+          items: cartItems.map(c => ({ menuItemId: c.menuItem.id, quantity: c.quantity })),
+          sessionToken
+        }) 
+      });
       const data = await res.json();
-      if (!data.success) { alert(data.error?.message || 'Failed to place order'); return; }
+      if (!data.success) {
+        if (data.error?.code === 'SESSION_EXPIRED') {
+          sessionStorage.removeItem(storageKey);
+          localStorage.setItem('placedOrderIds', JSON.stringify([]));
+          setError('Session expired. Please scan the table QR code again to start a new session.');
+        }
+        alert(data.error?.message || 'Failed to place order'); 
+        return; 
+      }
       
       // Store the placed order ID
       const storedIds = JSON.parse(localStorage.getItem('placedOrderIds') || '[]');
@@ -205,7 +285,17 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
     : (categories.find(c => c.id === activeTab)?.items || []);
 
   if (loading) return <div className="loading-center" style={{ minHeight: '100vh' }}><div className="spinner" style={{ width: 40, height: 40 }} /><span>Loading menu…</span></div>;
-  if (error) return <div className="loading-center" style={{ minHeight: '100vh' }}><div style={{ fontSize: '3rem' }}>😕</div><h2>{error}</h2><p style={{ color: 'var(--text-muted)' }}>Please ask staff for assistance.</p></div>;
+  if (error) return (
+    <div className="loading-center" style={{ minHeight: '100vh', textAlign: 'center', padding: '2rem', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+      <div style={{ fontSize: '3.5rem', marginBottom: '1rem' }}>😕</div>
+      <h2 style={{ color: 'var(--text-primary)', fontSize: '1.5rem', fontWeight: 700, maxWidth: '600px', margin: '0 auto 0.75rem auto', lineHeight: '1.35' }}>
+        {error}
+      </h2>
+      <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: 500 }}>
+        Please ask staff for assistance.
+      </p>
+    </div>
+  );
 
   return (
     <div className="order-page">
@@ -220,10 +310,15 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
           {liveOrders.length > 0 && (
             <button
               id="track-orders-btn"
-              className="btn btn-sm btn-track-orders"
+              className={`btn btn-sm ${liveOrders.every(o => o.status === 'completed') ? 'btn-success' : 'btn-track-orders'}`}
               onClick={() => setShowTracking(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: liveOrders.every(o => o.status === 'completed') ? 'var(--status-ready)' : '', color: liveOrders.every(o => o.status === 'completed') ? '#fff' : '' }}
             >
-              <Clock size={14} className="pulse-icon" /> Track Orders ({liveOrders.length})
+              {liveOrders.every(o => o.status === 'completed') ? (
+                <>🧾 View Bill (₹{liveOrders.reduce((s, o) => s + parseFloat(o.totalAmount.toString()), 0).toFixed(2)})</>
+              ) : (
+                <><Clock size={14} className="pulse-icon" /> Track Orders ({liveOrders.length})</>
+              )}
             </button>
           )}
           {cartCount > 0 && <button id="view-cart-btn" className="btn btn-primary btn-sm" onClick={() => setShowCart(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><ShoppingBag size={14} /> {cartCount}</button>}
@@ -328,52 +423,139 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
           <div className="modal-box" style={{ maxWidth: 440 }}>
             <div className="modal-header">
               <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Clock size={20} style={{ color: 'var(--status-pending)' }} /> Orders ({liveOrders.length})
+                {liveOrders.every(o => o.status === 'completed') ? (
+                  <>🧾 Current Bill</>
+                ) : (
+                  <><Clock size={20} style={{ color: 'var(--status-pending)' }} /> Orders ({liveOrders.length})</>
+                )}
               </h3>
               <button className="btn btn-ghost btn-icon" onClick={() => setShowTracking(false)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
             </div>
              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '55vh', overflowY: 'auto', paddingRight: '4px' }}>
-              {liveOrders.map(order => {
-                const isCancelled = order.status === 'cancelled';
-                const currentIndex = STATUS_STEPS.indexOf(order.status);
-                return (
-                  <div key={order.id} className="order-tracking-card">
-                    <div className="order-tracking-header">
-                      <span style={{ fontWeight: 700, fontSize: '0.825rem' }}>Order #{order.id.slice(-4).toUpperCase()}</span>
-                      <span className={`badge badge-${order.status}`} style={{ textTransform: 'capitalize', fontSize: '0.675rem', padding: '0.1rem 0.4rem' }}>
-                        {order.status}
-                      </span>
-                    </div>
-                    
-                    <div className="order-tracking-body">
-                      {/* Progress indicator */}
-                      {!isCancelled && (
-                        <div style={{ margin: '0.5rem 0' }}>
-                          <div style={{ display: 'flex', gap: '0.35rem', height: 5, borderRadius: 99, overflow: 'hidden' }}>
-                            <div style={{ flex: 1, borderRadius: 99, background: currentIndex >= 0 ? 'var(--status-pending)' : 'var(--border)', transition: 'background 0.5s ease' }} />
-                            <div style={{ flex: 1, borderRadius: 99, background: currentIndex >= 1 ? 'var(--status-preparing)' : 'var(--border)', transition: 'background 0.5s ease' }} />
-                            <div style={{ flex: 1, borderRadius: 99, background: currentIndex >= 2 ? 'var(--status-ready)' : 'var(--border)', transition: 'background 0.5s ease' }} />
-                          </div>
+              {liveOrders.every(o => o.status === 'completed') ? (
+                (() => {
+                  const itemMap = new Map<string, { menuItemName: string; quantity: number; price: number }>();
+                  let totalBill = 0;
+                  for (const o of liveOrders) {
+                    totalBill += parseFloat(o.totalAmount.toString());
+                    for (const item of o.items) {
+                      const key = item.menuItemName;
+                      const itemPrice = item.price ? parseFloat(item.price.toString()) : 0;
+                      const existing = itemMap.get(key);
+                      if (existing) {
+                        existing.quantity += item.quantity;
+                      } else {
+                        itemMap.set(key, { menuItemName: key, quantity: item.quantity, price: itemPrice });
+                      }
+                    }
+                  }
+                  const receiptItems = Array.from(itemMap.values());
+
+                  return (
+                    <div className="restaurant-receipt" style={{
+                      background: 'var(--card-bg, #fff)',
+                      color: 'var(--text-primary)',
+                      padding: '1.5rem 1rem',
+                      borderRadius: 'var(--radius-md)',
+                      fontFamily: 'Courier New, Courier, monospace',
+                      border: '1px dashed var(--border)',
+                      maxWidth: '100%',
+                      margin: '0 auto',
+                      position: 'relative',
+                    }}>
+                      <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+                        <h4 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: '0 0 0.25rem 0', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                          {restaurant?.restaurantName || 'QRestro'}
+                        </h4>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>TABLE: {tableNumber}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                          {new Date().toLocaleDateString()} {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
-                      )}
-
-                      {/* Items */}
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.2rem', marginTop: '0.4rem' }}>
-                        {order.items.map((item, index) => (
-                          <div key={index} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span>{item.quantity}× {item.menuItemName}</span>
-                          </div>
-                        ))}
                       </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border)', marginTop: '0.5rem', paddingTop: '0.4rem', fontSize: '0.78rem' }}>
-                        <span style={{ color: 'var(--text-muted)' }}>Est. Time: ~{order.estimatedTime} min</span>
-                        <span style={{ fontWeight: 700, color: 'var(--accent)' }}>₹{parseFloat(order.totalAmount.toString()).toFixed(2)}</span>
+                      
+                      <div style={{ borderTop: '1px dashed var(--border)', margin: '1rem 0' }} />
+                      
+                      <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px dashed var(--border)' }}>
+                            <th style={{ textAlign: 'left', paddingBottom: '0.5rem', fontWeight: 'bold' }}>ITEM</th>
+                            <th style={{ textAlign: 'center', paddingBottom: '0.5rem', fontWeight: 'bold', width: '30px' }}>QTY</th>
+                            <th style={{ textAlign: 'right', paddingBottom: '0.5rem', fontWeight: 'bold', width: '60px' }}>PRICE</th>
+                            <th style={{ textAlign: 'right', paddingBottom: '0.5rem', fontWeight: 'bold', width: '70px' }}>TOTAL</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {receiptItems.map((item, idx) => (
+                            <tr key={idx} style={{ height: '24px' }}>
+                              <td style={{ textAlign: 'left', padding: '0.15rem 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }}>{item.menuItemName}</td>
+                              <td style={{ textAlign: 'center', padding: '0.15rem 0' }}>{item.quantity}</td>
+                              <td style={{ textAlign: 'right', padding: '0.15rem 0' }}>₹{item.price.toFixed(2)}</td>
+                              <td style={{ textAlign: 'right', padding: '0.15rem 0' }}>₹{(item.price * item.quantity).toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      
+                      <div style={{ borderTop: '1px dashed var(--border)', marginTop: '1rem', paddingTop: '1rem' }} />
+                      
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.05rem' }}>
+                        <span>GRAND TOTAL</span>
+                        <span>₹{totalBill.toFixed(2)}</span>
+                      </div>
+                      
+                      <div style={{ borderTop: '1px dashed var(--border)', margin: '1rem 0' }} />
+                      
+                      <div style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                        <p style={{ margin: '0 0 0.4rem 0', fontWeight: 'bold', textTransform: 'uppercase', color: 'var(--status-ready)' }}>CASH PAYMENT ONLY</p>
+                        <p style={{ margin: 0 }}>Please show this screen at the counter to pay your bill.</p>
+                        <p style={{ marginTop: '0.5rem', fontStyle: 'italic' }}>Thank you! 🙏</p>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })()
+              ) : (
+                liveOrders.map(order => {
+                  const isCancelled = order.status === 'cancelled';
+                  const currentIndex = STATUS_STEPS.indexOf(order.status);
+                  return (
+                    <div key={order.id} className="order-tracking-card">
+                      <div className="order-tracking-header">
+                        <span style={{ fontWeight: 700, fontSize: '0.825rem' }}>Order #{order.id.slice(-4).toUpperCase()}</span>
+                        <span className={`badge badge-${order.status}`} style={{ textTransform: 'capitalize', fontSize: '0.675rem', padding: '0.1rem 0.4rem' }}>
+                          {order.status}
+                        </span>
+                      </div>
+                      
+                      <div className="order-tracking-body">
+                        {/* Progress indicator */}
+                        {!isCancelled && (
+                          <div style={{ margin: '0.5rem 0' }}>
+                            <div style={{ display: 'flex', gap: '0.35rem', height: 5, borderRadius: 99, overflow: 'hidden' }}>
+                              <div style={{ flex: 1, borderRadius: 99, background: currentIndex >= 0 ? 'var(--status-pending)' : 'var(--border)', transition: 'background 0.5s ease' }} />
+                              <div style={{ flex: 1, borderRadius: 99, background: currentIndex >= 1 ? 'var(--status-preparing)' : 'var(--border)', transition: 'background 0.5s ease' }} />
+                              <div style={{ flex: 1, borderRadius: 99, background: currentIndex >= 2 ? 'var(--status-ready)' : 'var(--border)', transition: 'background 0.5s ease' }} />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Items */}
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.2rem', marginTop: '0.4rem' }}>
+                          {order.items.map((item, index) => (
+                            <div key={index} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span>{item.quantity}× {item.menuItemName}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border)', marginTop: '0.5rem', paddingTop: '0.4rem', fontSize: '0.78rem' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Est. Time: ~{order.estimatedTime} min</span>
+                          <span style={{ fontWeight: 700, color: 'var(--accent)' }}>₹{parseFloat(order.totalAmount.toString()).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>

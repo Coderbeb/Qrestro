@@ -13,9 +13,12 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
     const ownerId = searchParams.get('ownerId');
+    const tableNumber = searchParams.get('tableNumber');
+    const code = searchParams.get('code');
+    const sessionToken = searchParams.get('sessionToken');
 
-    if (!ownerId) {
-      return NextResponse.json({ success: false, error: { code: 'MISSING_FIELDS', message: 'ownerId is required' } }, { status: 400 });
+    if (!ownerId || !tableNumber) {
+      return NextResponse.json({ success: false, error: { code: 'MISSING_FIELDS', message: 'ownerId and tableNumber are required' } }, { status: 400 });
     }
 
     const owner = await prisma.owner.findUnique({
@@ -23,6 +26,41 @@ export async function GET(request: NextRequest) {
       select: { id: true, restaurantName: true },
     });
     if (!owner) return NextResponse.json({ success: false, error: { code: 'NOT_FOUND', message: 'Restaurant not found' } }, { status: 404 });
+
+    // Validate table exists and is active
+    const table = await prisma.table.findFirst({
+      where: { ownerId, tableNumber: parseInt(tableNumber), isActive: true }
+    });
+    if (!table) {
+      return NextResponse.json({ success: false, error: { code: 'NOT_FOUND', message: 'Table not found or is currently inactive' } }, { status: 404 });
+    }
+
+    const { getTableSignature, verifySessionToken, generateSessionToken } = require('@/lib/security');
+
+    let isValid = false;
+    let isExpiredToken = false;
+
+    if (code) {
+      const expectedSignature = getTableSignature(ownerId, parseInt(tableNumber));
+      if (code === expectedSignature) {
+        isValid = true;
+      }
+    } else if (sessionToken) {
+      if (verifySessionToken(sessionToken, table.updatedAt)) {
+        isValid = true;
+      } else {
+        isExpiredToken = true;
+      }
+    }
+
+    if (!isValid) {
+      if (isExpiredToken) {
+        return NextResponse.json({ success: false, error: { code: 'SESSION_EXPIRED', message: 'Dining session has expired. Please scan the table QR code again to start a new session.' } }, { status: 403 });
+      }
+      return NextResponse.json({ success: false, error: { code: 'INVALID_SIGNATURE', message: 'Access Denied: Please scan the table QR code to view the menu.' } }, { status: 403 });
+    }
+
+    const nextSessionToken = generateSessionToken(table.id, table.updatedAt);
 
     // Fetch categories (sorted)
     const categories = await prisma.menuCategory.findMany({
@@ -68,6 +106,7 @@ export async function GET(request: NextRequest) {
         items: formatted,          // flat list (for backward compat)
         categories: categorized,   // grouped by category
         uncategorized,             // items without a category
+        sessionToken: nextSessionToken, // verification session token
       },
     });
   } catch (error) {
