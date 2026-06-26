@@ -10,8 +10,9 @@ import { join } from 'path';
  * @returns The URL or Base64 string of the uploaded file
  */
 export async function uploadFile(file: File): Promise<string> {
-  // Read provider from environment, default to 'local' for VPS/localhost
-  const provider = process.env.STORAGE_PROVIDER || 'local';
+  // Read provider from environment. If running on Vercel, fallback to 'database' (Base64 data URL) since the filesystem is read-only.
+  const isVercel = process.env.VERCEL === '1';
+  const provider = process.env.STORAGE_PROVIDER || (isVercel ? 'database' : 'local');
 
   const bytes = await file.arrayBuffer();
   const buffer = Buffer.from(bytes);

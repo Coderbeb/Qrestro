@@ -74,7 +74,7 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
       }
 
       const active = results.filter((o): o is any => 
-        o !== null && !o.isExpired && o.status !== 'cancelled'
+        o !== null && !o.isExpired && o.status !== 'cancelled' && o.tableNumber === parseInt(tableNumber)
       ).map(o => ({
         ...o,
         totalAmount: parseFloat(o.totalAmount.toString()),
@@ -111,6 +111,7 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
     'order:new': (data: unknown) => {
       const newOrder = data as OrderStatus;
       if (!newOrder || !newOrder.id) return;
+      if (newOrder.tableNumber !== parseInt(tableNumber)) return;
       
       const storedIds = JSON.parse(localStorage.getItem('placedOrderIds') || '[]');
       if (storedIds.includes(newOrder.id)) {
@@ -518,8 +519,8 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
                   const isCancelled = order.status === 'cancelled';
                   const currentIndex = STATUS_STEPS.indexOf(order.status);
                   return (
-                    <div key={order.id} className="order-tracking-card">
-                      <div className="order-tracking-header">
+                    <div key={order.id} className={`order-tracking-card ${order.status}`}>
+                      <div className={`order-tracking-header ${order.status}`}>
                         <span style={{ fontWeight: 700, fontSize: '0.825rem' }}>Order #{order.id.slice(-4).toUpperCase()}</span>
                         <span className={`badge badge-${order.status}`} style={{ textTransform: 'capitalize', fontSize: '0.675rem', padding: '0.1rem 0.4rem' }}>
                           {order.status}

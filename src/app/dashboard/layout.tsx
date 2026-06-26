@@ -2,19 +2,37 @@
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { LayoutDashboard, UtensilsCrossed, QrCode, ShoppingBag, Settings, LogOut, Sun, Moon, Lock, Eye, EyeOff, ChevronLeft, ChevronRight, CreditCard, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, UtensilsCrossed, QrCode, ShoppingBag, Settings, LogOut, Sun, Moon, Lock, Eye, EyeOff, ChevronLeft, ChevronRight, CreditCard, TrendingUp, ChefHat } from 'lucide-react';
 import { useSocket } from '@/lib/useSocket';
 import { playNotificationSound } from '@/lib/audio';
 
-const NAV_ITEMS = [
-  { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} />, id: '' },
-  { href: '/dashboard/menu', label: 'Menu', icon: <UtensilsCrossed size={18} />, id: 'menu' },
-  { href: '/dashboard/tables', label: 'Tables & QR', icon: <QrCode size={18} />, id: 'tables' },
-  { href: '/dashboard/orders', label: 'Orders', icon: <ShoppingBag size={18} />, id: 'orders' },
-  { href: '/dashboard/billing', label: 'Billing', icon: <CreditCard size={18} />, id: 'billing' },
-  { href: '/dashboard/reports', label: 'Reports', icon: <TrendingUp size={18} />, id: 'reports' },
-  { href: '/dashboard/settings', label: 'Settings', icon: <Settings size={18} />, id: 'settings' },
+const NAV_SECTIONS = [
+  {
+    title: 'Operations',
+    items: [
+      { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} />, id: '' },
+      { href: '/dashboard/orders', label: 'Orders', icon: <ShoppingBag size={18} />, id: 'orders' },
+      { href: '/dashboard/kds', label: 'Kitchen KDS', icon: <ChefHat size={18} />, id: 'kds' },
+      { href: '/dashboard/billing', label: 'Billing', icon: <CreditCard size={18} />, id: 'billing' },
+    ]
+  },
+  {
+    title: 'Management',
+    items: [
+      { href: '/dashboard/menu', label: 'Menu', icon: <UtensilsCrossed size={18} />, id: 'menu' },
+      { href: '/dashboard/tables', label: 'Tables & QR', icon: <QrCode size={18} />, id: 'tables' },
+    ]
+  },
+  {
+    title: 'Analytics & Admin',
+    items: [
+      { href: '/dashboard/reports', label: 'Reports', icon: <TrendingUp size={18} />, id: 'reports' },
+      { href: '/dashboard/settings', label: 'Settings', icon: <Settings size={18} />, id: 'settings' },
+    ]
+  }
 ];
+
+const ALL_NAV_ITEMS = NAV_SECTIONS.flatMap(section => section.items);
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -185,22 +203,46 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         <nav className="sidebar-nav">
-          {NAV_ITEMS.map(item => (
-            <Link
-              key={item.id}
-              href={item.href}
-              id={`nav-${item.id || 'dashboard'}`}
-              className={`sidebar-nav-item ${active === item.id ? 'active' : ''}`}
-            >
-              <span className="sidebar-nav-icon">{item.icon}</span>
-              <span className="sidebar-nav-text">{item.label}</span>
-            </Link>
+          {NAV_SECTIONS.map((section, sIdx) => (
+            <div key={section.title} className="sidebar-section">
+              {sIdx > 0 && <div className="sidebar-section-divider" />}
+              <div className="sidebar-section-title">{section.title}</div>
+              <div className="sidebar-section-items" style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                {section.items.map(item => (
+                  <Link
+                    key={item.id}
+                    href={item.href}
+                    id={`nav-${item.id || 'dashboard'}`}
+                    className={`sidebar-nav-item ${active === item.id ? 'active' : ''}`}
+                  >
+                    <span className="sidebar-nav-icon">{item.icon}</span>
+                    <span className="sidebar-nav-text">{item.label}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
 
         <div className="sidebar-footer">
-          <button id="logout-btn" className="sidebar-nav-item btn-ghost" onClick={handleLogout} style={{ width: '100%' }}>
-            <span className="sidebar-nav-icon"><LogOut size={16} /></span>
+          <button 
+            id="logout-btn" 
+            className="sidebar-nav-item btn-ghost" 
+            onClick={handleLogout} 
+            style={{ 
+              width: '100%', 
+              color: 'var(--status-cancelled)' 
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.background = 'rgba(220, 38, 38, 0.08)';
+              e.currentTarget.style.color = 'var(--status-cancelled)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = 'var(--status-cancelled)';
+            }}
+          >
+            <span className="sidebar-nav-icon" style={{ color: 'var(--status-cancelled)' }}><LogOut size={16} /></span>
             <span className="sidebar-nav-text">Logout</span>
           </button>
         </div>
@@ -222,7 +264,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <span />
             </button>
             <span className="topbar-title">
-              {NAV_ITEMS.find(n => n.id === active)?.label || 'Dashboard'}
+              {ALL_NAV_ITEMS.find(n => n.id === active)?.label || 'Dashboard'}
             </span>
           </div>
           
