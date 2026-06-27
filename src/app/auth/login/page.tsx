@@ -14,27 +14,43 @@ export default function LoginPage() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('token');
-      const ownerStr = localStorage.getItem('owner');
-      if (token && ownerStr) {
-        try {
-          const owner = JSON.parse(ownerStr);
-          if (owner && owner.role === 'SUPER_ADMIN') {
-            router.replace('/superadmin');
-            return;
-          } else if (owner) {
-            router.replace('/dashboard');
-            return;
+    async function verifySession() {
+      if (typeof window !== 'undefined') {
+        const token = localStorage.getItem('token');
+        const ownerStr = localStorage.getItem('owner');
+        if (token && ownerStr) {
+          try {
+            const owner = JSON.parse(ownerStr);
+            const res = await fetch('/api/auth/verify', {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (data.success) {
+              // Refresh cookie for middleware access
+              document.cookie = `token=${token}; path=/; max-age=86400; SameSite=Lax`;
+              if (owner && owner.role === 'SUPER_ADMIN') {
+                router.replace('/superadmin');
+                return;
+              } else if (owner) {
+                router.replace('/dashboard');
+                return;
+              }
+            } else {
+              // Token is invalid/expired. Clear it.
+              localStorage.removeItem('token');
+              localStorage.removeItem('owner');
+              document.cookie = 'token=; path=/; max-age=0; SameSite=Lax';
+            }
+          } catch {
+            localStorage.removeItem('token');
+            localStorage.removeItem('owner');
+            document.cookie = 'token=; path=/; max-age=0; SameSite=Lax';
           }
-        } catch {
-          // Clear corrupted localStorage
-          localStorage.removeItem('token');
-          localStorage.removeItem('owner');
         }
       }
+      setCheckingAuth(false);
     }
-    setCheckingAuth(false);
+    verifySession();
   }, [router]);
 
   if (checkingAuth) {

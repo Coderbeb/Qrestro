@@ -49,10 +49,13 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  // Public route — customers place orders
   try {
-    // Rate limit: max 10 order placements per minute per IP
-    if (isRateLimited(request, 10, 60000)) {
+    // Check if the request is from an authenticated staff member (dashboard)
+    const user = authenticateRequest(request);
+    const isStaff = !!user;
+
+    // Rate limit only applies to public customers, not staff
+    if (!isStaff && isRateLimited(request, 10, 60000)) {
       return NextResponse.json(
         { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Too many orders placed from this device. Please wait a moment.' } },
         { status: 429 }
@@ -60,7 +63,12 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { ownerId, tableNumber, items, sessionToken } = body;
+    let { ownerId, tableNumber, items, sessionToken, notes } = body;
+
+    // For staff orders, ownerId is the authenticated user's ID
+    if (isStaff && user) {
+      ownerId = user.id;
+    }
 
     if (!ownerId || !tableNumber || !items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ success: false, error: { code: 'MISSING_FIELDS', message: 'ownerId, tableNumber and items are required' } }, { status: 400 });
@@ -70,13 +78,15 @@ export async function POST(request: NextRequest) {
     const table = await prisma.table.findFirst({ where: { ownerId, tableNumber: parseInt(tableNumber), isActive: true } });
     if (!table) return NextResponse.json({ success: false, error: { code: 'NOT_FOUND', message: 'Table not found or inactive' } }, { status: 404 });
 
-    // Verify table session token to prevent URL tampering and ordering after reset (e.g. from home)
-    const { verifySessionToken } = require('@/lib/security');
-    if (!sessionToken || !verifySessionToken(sessionToken, table.updatedAt)) {
-      return NextResponse.json(
-        { success: false, error: { code: 'SESSION_EXPIRED', message: 'Access Denied: Session expired or invalid. Please scan the QR code on your table to place orders.' } },
-        { status: 403 }
-      );
+    // Verify table session token to prevent URL tampering and ordering after reset (customers only)
+    if (!isStaff) {
+      const { verifySessionToken } = require('@/lib/security');
+      if (!sessionToken || !verifySessionToken(sessionToken, table.updatedAt)) {
+        return NextResponse.json(
+          { success: false, error: { code: 'SESSION_EXPIRED', message: 'Access Denied: Session expired or invalid. Please scan the QR code on your table to place orders.' } },
+          { status: 403 }
+        );
+      }
     }
 
     // Validate menu items and calculate totals
@@ -116,6 +126,7 @@ export async function POST(request: NextRequest) {
         totalAmount,
         estimatedTime: maxPrepTime,
         status: 'pending',
+        notes: notes?.trim() || null,
         items: { create: orderItems },
       },
       include: { items: true },

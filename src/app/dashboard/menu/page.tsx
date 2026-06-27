@@ -123,8 +123,25 @@ export default function MenuPage() {
   }
 
   async function toggleAvailability(item: MenuItem) {
-    await fetch(`/api/menu/${item.id}`, { method: 'PUT', headers: getAuthHeader(), body: JSON.stringify({ isAvailable: !item.isAvailable }) });
-    loadAll();
+    const previousItems = [...items];
+    // Optimistically update state
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, isAvailable: !i.isAvailable } : i));
+
+    try {
+      const res = await fetch(`/api/menu/${item.id}`, { 
+        method: 'PUT', 
+        headers: getAuthHeader(), 
+        body: JSON.stringify({ isAvailable: !item.isAvailable }) 
+      });
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error?.message || 'Failed to update availability');
+      }
+    } catch (error) {
+      // Revert state on error
+      setItems(previousItems);
+      showToast('Failed to update availability.');
+    }
   }
 
   // ── Category handlers ─────────────────────────────────────────
@@ -172,10 +189,7 @@ export default function MenuPage() {
           {tab === 'categories' ? (
             <button className="btn btn-primary" onClick={openAddCat} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><Plus size={16} /> Add Category</button>
           ) : (
-            <>
-              <button className="btn btn-ghost" onClick={() => setTab('categories')} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><Folder size={16} /> Categories</button>
-              <button id="add-menu-item-btn" className="btn btn-primary" onClick={openAddItem} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><Plus size={16} /> Add Item</button>
-            </>
+            <button id="add-menu-item-btn" className="btn btn-primary" onClick={openAddItem} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><Plus size={16} /> Add Item</button>
           )}
         </div>
       </div>
@@ -190,7 +204,28 @@ export default function MenuPage() {
       </div>
 
       {loading ? (
-        <div className="loading-center"><div className="spinner" /><span>Loading…</span></div>
+        <div className="menu-grid">
+          {[1,2,3,4,5,6].map(i => (
+            <div key={i} className="menu-item-card">
+              <div className="menu-item-img skeleton" />
+              <div className="menu-item-body">
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <div className="skeleton skeleton-text" style={{ width: '65%', height: 16 }} />
+                  <div className="skeleton" style={{ width: 36, height: 20, borderRadius: 999 }} />
+                </div>
+                <div className="skeleton skeleton-text" style={{ width: '45%', height: 12, marginBottom: 8 }} />
+                <div className="skeleton skeleton-text" style={{ width: '90%', height: 12, marginBottom: 12 }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div className="skeleton skeleton-text" style={{ width: 60, height: 18 }} />
+                  <div style={{ display: 'flex', gap: '0.35rem' }}>
+                    <div className="skeleton" style={{ width: 30, height: 30, borderRadius: 'var(--radius-sm)' }} />
+                    <div className="skeleton" style={{ width: 30, height: 30, borderRadius: 'var(--radius-sm)' }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : tab === 'categories' ? (
         /* ── Categories Tab ── */
         <>
@@ -246,36 +281,96 @@ export default function MenuPage() {
               <button className="btn btn-primary" onClick={openAddItem} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><Plus size={16} /> Add Item</button>
             </div>
           ) : (
-            <div className="menu-grid">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 350px))', gap: '1rem', justifyContent: 'start' }}>
               {filteredItems.map(item => (
-                <div key={item.id} className="menu-item-card">
-                  <div className="menu-item-img">
-                    {item.imageUrl ? <img src={item.imageUrl} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Utensils size={36} style={{ strokeWidth: 1.5, opacity: 0.4 }} />}
-                  </div>
-                  <div className="menu-item-body">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem', gap: '0.5rem' }}>
-                      <div className="menu-item-name" style={{ flex: 1, minWidth: 0 }}>{item.name}</div>
-                      <label className="toggle-switch" title={item.isAvailable ? 'Available' : 'Unavailable'}>
-                        <input type="checkbox" checked={item.isAvailable} onChange={() => toggleAvailability(item)} />
-                        <span className="toggle-slider" />
-                      </label>
-                    </div>
-                    {/* Category chip */}
-                    {item.category && (
-                      <span style={{ display: 'inline-block', background: 'var(--accent-glow)', color: 'var(--accent)', padding: '0.15rem 0.55rem', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 600, marginBottom: '0.35rem' }}>
-                        {item.category.name}
-                      </span>
+                <div 
+                  key={item.id} 
+                  className="menu-item-card" 
+                  style={{ 
+                    display: 'flex', 
+                    flexDirection: 'row',
+                    gap: '0.85rem', 
+                    padding: '0.75rem', 
+                    minHeight: '110px', 
+                    alignItems: 'center',
+                    background: 'var(--card-bg)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-lg)'
+                  }}
+                >
+                  {/* Left: Compact Image (just like customer side) */}
+                  <div style={{
+                    width: '80px',
+                    height: '80px',
+                    borderRadius: 'var(--radius-md)',
+                    overflow: 'hidden',
+                    background: 'var(--bg-hover)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    border: '1px solid var(--border-light, var(--border))'
+                  }}>
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <Utensils size={24} style={{ strokeWidth: 1.5, opacity: 0.4, color: 'var(--text-muted)' }} />
                     )}
-                    {item.description && <div className="menu-item-desc">{item.description}</div>}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}><Clock size={12} /> {item.preparationTime} min</span>
-                      <span className={`badge ${item.isAvailable ? 'badge-ready' : 'badge-cancelled'}`} style={{ padding: '0.1rem 0.5rem', fontSize: '0.7rem' }}>{item.isAvailable ? 'Available' : 'Unavailable'}</span>
+                  </div>
+                  
+                  {/* Right: Item body details */}
+                  <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.15rem', gap: '0.5rem' }}>
+                        <div style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {item.name}
+                        </div>
+                        <label className="toggle-switch" title={item.isAvailable ? 'Available' : 'Unavailable'}>
+                          <input type="checkbox" checked={item.isAvailable} onChange={() => toggleAvailability(item)} />
+                          <span className="toggle-slider" />
+                        </label>
+                      </div>
+
+                      {/* Category chip */}
+                      {item.category && (
+                        <span style={{ 
+                          display: 'inline-block', 
+                          background: 'var(--accent-glow)', 
+                          color: 'var(--accent)', 
+                          padding: '0.05rem 0.4rem', 
+                          borderRadius: '999px', 
+                          fontSize: '0.65rem', 
+                          fontWeight: 700, 
+                          marginBottom: '0.25rem' 
+                        }}>
+                          {item.category.name}
+                        </span>
+                      )}
+
+                      {item.description && (
+                        <div style={{ 
+                          fontSize: '0.75rem', 
+                          color: 'var(--text-muted)', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis', 
+                          whiteSpace: 'nowrap',
+                          marginBottom: '0.25rem' 
+                        }}>
+                          {item.description}
+                        </div>
+                      )}
                     </div>
-                    <div className="menu-item-footer">
-                      <div className="menu-item-price">₹{item.price.toFixed(2)}</div>
-                      <div className="menu-item-actions">
-                        <button id={`edit-item-${item.id}`} className="btn btn-ghost btn-sm btn-icon" onClick={() => openEditItem(item)} title="Edit" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Edit size={14} /></button>
-                        <button id={`delete-item-${item.id}`} className="btn btn-danger btn-sm btn-icon" onClick={() => handleDeleteItem(item.id)} disabled={deletingItem === item.id} title="Delete" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{deletingItem === item.id ? '…' : <Trash2 size={14} />}</button>
+
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--text-primary)' }}>₹{item.price.toFixed(2)}</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.15rem', fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                          <Clock size={10} /> {item.preparationTime}m
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.15rem', alignItems: 'center' }}>
+                        <button id={`edit-item-${item.id}`} className="btn btn-ghost btn-sm btn-icon" onClick={() => openEditItem(item)} title="Edit" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '26px', width: '26px', minHeight: 26 }}><Edit size={11} /></button>
+                        <button id={`delete-item-${item.id}`} className="btn btn-danger btn-sm btn-icon" onClick={() => handleDeleteItem(item.id)} disabled={deletingItem === item.id} title="Delete" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '26px', width: '26px', minHeight: 26 }}>{deletingItem === item.id ? '…' : <Trash2 size={11} />}</button>
                       </div>
                     </div>
                   </div>

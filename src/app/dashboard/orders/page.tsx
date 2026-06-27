@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Clock, ChefHat, CheckCircle2, Check, RefreshCw, ShoppingBag, X, CreditCard, Printer, CheckCircle } from 'lucide-react';
+import { Clock, ChefHat, CheckCircle2, Check, RefreshCw, ShoppingBag, X, CreditCard, Printer, CheckCircle, Bell, Plus, Minus, Search } from 'lucide-react';
 import { getAuthHeader } from '@/lib/api';
 import { useSocket } from '@/lib/useSocket';
 
@@ -19,6 +19,8 @@ type Order = {
   totalAmount: number;
   estimatedTime: number;
   createdAt: string;
+  notes?: string | null;
+  cancellationReason?: string | null;
   items: OrderItem[];
 };
 
@@ -53,6 +55,23 @@ export default function OrdersPage() {
   const [billingTables, setBillingTables] = useState<any[]>([]);
   const [billingDrawerTable, setBillingDrawerTable] = useState<number | null>(null);
   const [settling, setSettling] = useState(false);
+
+  // Service alert states
+  const [serviceAlerts, setServiceAlerts] = useState<{ tableNumber: number; type: string; timestamp: string; id: string }[]>([]);
+
+  // Cancel modal states
+  const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+
+  // Manual order states
+  const [showManualOrderModal, setShowManualOrderModal] = useState(false);
+  const [manualOrderTable, setManualOrderTable] = useState('');
+  const [manualOrderItems, setManualOrderItems] = useState<Map<string, { id: string; name: string; price: number; quantity: number }>>(new Map());
+  const [menuItems, setMenuItems] = useState<any[]>([]);
+  const [tablesList, setTablesList] = useState<any[]>([]);
+  const [manualOrderSearch, setManualOrderSearch] = useState('');
+  const [placingManualOrder, setPlacingManualOrder] = useState(false);
+  const [manualOrderNotes, setManualOrderNotes] = useState('');
 
   // Get owner ID and profile details from localStorage
   useEffect(() => {
@@ -106,6 +125,22 @@ export default function OrdersPage() {
       setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
       loadBilling();
     },
+    'service:request': (data: unknown) => {
+      const alert = data as { tableNumber: number; type: string; timestamp: string };
+      if (!alert) return;
+      const id = `${alert.tableNumber}-${alert.type}-${Date.now()}`;
+      setServiceAlerts(prev => [...prev, { ...alert, id }]);
+      // Auto-dismiss after 15 seconds
+      setTimeout(() => {
+        setServiceAlerts(prev => prev.filter(a => a.id !== id));
+      }, 15000);
+      // Play notification sound
+      try {
+        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczGj17q9XVlEgaFVuVyN7PeTAbPJHG4dSOOhczd7zf1JY7FiRvt9jRjjAaKXKz2tWcQx0scbTa0JU5Hi5xtN7QjjMcMXW82JE3');
+        audio.volume = 0.5;
+        audio.play().catch(() => {});
+      } catch {}
+    },
   }), [loadBilling]);
 
   useSocket(ownerId, socketListeners);
@@ -141,16 +176,117 @@ export default function OrdersPage() {
   }
 
   async function cancelOrder(order: Order) {
-    if (!confirm('Cancel this order?')) return;
+    setCancelModalOrder(order);
+    setCancelReason('');
+  }
+
+  async function openManualOrderModal() {
+    setShowManualOrderModal(true);
+    setManualOrderTable('');
+    setManualOrderItems(new Map());
+    setManualOrderSearch('');
+    setManualOrderNotes('');
+    try {
+      const menuRes = await fetch('/api/menu?available=true', { headers: getAuthHeader() });
+      const menuData = await menuRes.json();
+      if (menuData.success) {
+        setMenuItems(menuData.data);
+      }
+
+      const tablesRes = await fetch('/api/tables', { headers: getAuthHeader() });
+      const tablesData = await tablesRes.json();
+      if (tablesData.success) {
+        setTablesList(tablesData.data);
+      }
+    } catch (err) {
+      console.error('Failed to load manual order details:', err);
+    }
+  }
+
+  function updateManualItemQty(itemId: string, change: number, menuItem?: any) {
+    setManualOrderItems(prev => {
+      const next = new Map(prev);
+      const existing = next.get(itemId);
+      if (existing) {
+        const newQty = existing.quantity + change;
+        if (newQty <= 0) {
+          next.delete(itemId);
+        } else {
+          next.set(itemId, { ...existing, quantity: newQty });
+        }
+      } else if (change > 0 && menuItem) {
+        next.set(itemId, {
+          id: menuItem.id,
+          name: menuItem.name,
+          price: menuItem.price,
+          quantity: change
+        });
+      }
+      return next;
+    });
+  }
+
+  async function submitManualOrder() {
+    if (!manualOrderTable) {
+      alert('Please select or enter a table number');
+      return;
+    }
+    const itemsList = Array.from(manualOrderItems.values()).map(item => ({
+      menuItemId: item.id,
+      quantity: item.quantity
+    }));
+    if (itemsList.length === 0) {
+      alert('Please add at least one item to the order');
+      return;
+    }
+    setPlacingManualOrder(true);
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: {
+          ...getAuthHeader(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          tableNumber: parseInt(manualOrderTable),
+          items: itemsList,
+          notes: manualOrderNotes.trim() || undefined
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShowManualOrderModal(false);
+        loadOrders();
+        loadBilling();
+      } else {
+        alert(data.error?.message || 'Failed to place manual order');
+      }
+    } catch (err) {
+      alert('Network error placing manual order');
+    } finally {
+      setPlacingManualOrder(false);
+    }
+  }
+
+  async function confirmCancelOrder() {
+    if (!cancelModalOrder || !cancelReason.trim()) return;
+    const order = cancelModalOrder;
     setUpdating(order.id);
     try {
-      await fetch(`/api/orders/${order.id}`, {
+      const res = await fetch(`/api/orders/${order.id}`, {
         method: 'PUT',
         headers: getAuthHeader(),
-        body: JSON.stringify({ status: 'cancelled' }),
+        body: JSON.stringify({ status: 'cancelled', cancellationReason: cancelReason.trim() }),
       });
-      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'cancelled' } : o));
-      loadBilling();
+      const data = await res.json();
+      if (data.success) {
+        setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'cancelled', cancellationReason: cancelReason.trim() } : o));
+        loadBilling();
+        setCancelModalOrder(null);
+        setCancelReason('');
+      } else {
+        alert(data.error?.message || 'Failed to cancel order');
+      }
     } finally { setUpdating(null); }
   }
 
@@ -224,7 +360,35 @@ export default function OrdersPage() {
 
   const selectedTableBilling = billingTables.find(t => t.tableNumber === billingDrawerTable);
 
-  if (loading) return <div className="loading-center"><div className="spinner" /><span>Loading orders…</span></div>;
+  if (loading) return (
+    <div style={{ padding: '0' }}>
+      <div className="page-header">
+        <div>
+          <div className="skeleton skeleton-text" style={{ width: 120, height: 14, marginBottom: 6 }} />
+          <div className="skeleton skeleton-text" style={{ width: 180, height: 24, marginBottom: 6 }} />
+          <div className="skeleton skeleton-text" style={{ width: 200, height: 14 }} />
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+        {[1,2,3].map(col => (
+          <div key={col} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div className="skeleton" style={{ height: 36, borderRadius: 'var(--radius-sm)' }} />
+            {[1,2].map(card => (
+              <div key={card} className="card" style={{ padding: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                  <div className="skeleton" style={{ width: 48, height: 32, borderRadius: 'var(--radius-sm)' }} />
+                  <div className="skeleton skeleton-text" style={{ width: 60, height: 16 }} />
+                </div>
+                <div className="skeleton skeleton-text" style={{ width: '80%', height: 14, marginBottom: 8 }} />
+                <div className="skeleton skeleton-text" style={{ width: '60%', height: 14, marginBottom: 12 }} />
+                <div className="skeleton" style={{ width: '100%', height: 32, borderRadius: 'var(--radius-sm)' }} />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -503,7 +667,42 @@ export default function OrdersPage() {
           }
         }
         }
-      ` }} />
+      `}} />
+
+      {/* Service Alert Banners */}
+      {serviceAlerts.length > 0 && (
+        <div style={{ position: 'fixed', top: 12, right: 12, zIndex: 3000, display: 'flex', flexDirection: 'column', gap: '0.5rem', maxWidth: 360 }}>
+          {serviceAlerts.map(alert => (
+            <div
+              key={alert.id}
+              onClick={() => setServiceAlerts(prev => prev.filter(a => a.id !== alert.id))}
+              style={{
+                padding: '0.75rem 1rem',
+                background: alert.type === 'waiter' ? 'var(--status-pending)' : 'var(--accent)',
+                color: '#fff',
+                borderRadius: 'var(--radius-md)',
+                boxShadow: 'var(--shadow-lg)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontSize: '0.88rem',
+                fontWeight: 700,
+                animation: 'fadeInUp 0.3s ease',
+              }}
+            >
+              <Bell size={18} />
+              <span>
+                {alert.type === 'waiter'
+                  ? `🛎 Table ${alert.tableNumber} is calling for a waiter!`
+                  : `💧 Table ${alert.tableNumber} ordered water!`}
+              </span>
+              <X size={14} style={{ marginLeft: 'auto', opacity: 0.7 }} />
+            </div>
+          ))}
+        </div>
+      )}
+
 
       <div className="page-header">
         <div>
@@ -512,6 +711,14 @@ export default function OrdersPage() {
           <p>{activeOrders.filter(o => o.status !== 'completed').length} active · real-time updates</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <button 
+            id="manual-order-btn"
+            className="btn btn-primary btn-sm"
+            onClick={openManualOrderModal}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', height: '34px', fontWeight: 700 }}
+          >
+            <Plus size={14} /> New Order
+          </button>
           <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--status-ready)', animation: 'pulse-glow 2s ease infinite' }} />
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Live</span>
           <button 
@@ -719,6 +926,14 @@ export default function OrdersPage() {
                               </div>
                             ))}
                           </div>
+
+                          {/* Order notes */}
+                          {order.notes && (
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', background: 'var(--bg-hover)', padding: '0.4rem 0.6rem', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'flex-start', gap: '0.35rem' }}>
+                              <span>📝</span>
+                              <span style={{ fontStyle: 'italic' }}>{order.notes}</span>
+                            </div>
+                          )}
 
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span>⏱ Est. {order.estimatedTime} min</span>
@@ -977,6 +1192,424 @@ export default function OrdersPage() {
             <p style={{ margin: '0 0 0.35rem 0', fontWeight: 'bold', textTransform: 'uppercase' }}>CASH PAYMENT ONLY</p>
             <p style={{ margin: 0 }}>Received with thanks.</p>
             <p style={{ marginTop: '0.5rem', fontStyle: 'italic' }}>Thank you! Please visit again. 🙏</p>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Order Modal */}
+      {cancelModalOrder && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setCancelModalOrder(null)}>
+          <div className="modal-box" style={{ maxWidth: 420 }}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <X size={20} style={{ color: 'var(--status-cancelled)' }} /> Cancel Order #{cancelModalOrder.id.slice(-4).toUpperCase()}
+              </h3>
+              <button className="btn btn-ghost btn-icon" onClick={() => setCancelModalOrder(null)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
+            </div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+              Table {cancelModalOrder.tableNumber} · ₹{cancelModalOrder.totalAmount.toFixed(2)}
+            </p>
+            <div className="form-group">
+              <label className="form-label">Why are you cancelling this order? *</label>
+              <textarea
+                id="cancel-reason-input"
+                value={cancelReason}
+                onChange={e => setCancelReason(e.target.value)}
+                placeholder="e.g. Item out of stock, customer request, kitchen issue..."
+                maxLength={500}
+                rows={3}
+                autoFocus
+                style={{
+                  width: '100%',
+                  padding: '0.6rem 0.75rem',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-hover)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.85rem',
+                  resize: 'vertical',
+                  fontFamily: 'inherit',
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+              <button className="btn btn-ghost" onClick={() => setCancelModalOrder(null)}>Keep Order</button>
+              <button
+                id="confirm-cancel-btn"
+                className="btn btn-danger"
+                onClick={confirmCancelOrder}
+                disabled={!cancelReason.trim() || updating === cancelModalOrder.id}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+              >
+                {updating === cancelModalOrder.id ? 'Cancelling…' : <><X size={14} /> Cancel Order</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Order Modal */}
+      {showManualOrderModal && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowManualOrderModal(false)}>
+          <div className="modal-box" style={{ 
+            maxWidth: 880, 
+            width: '95%', 
+            maxHeight: '90vh', 
+            display: 'flex', 
+            flexDirection: 'column',
+            padding: '1.75rem',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border)',
+            boxShadow: 'var(--shadow-xl)',
+            borderRadius: 'var(--radius-xl)'
+          }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--border-light, var(--border))', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
+              <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', fontSize: '1.35rem', fontWeight: 800 }}>
+                <ShoppingBag className="text-accent" size={22} style={{ color: 'var(--accent)' }} /> 
+                <span style={{ fontFamily: 'var(--font-brand)', color: 'var(--text-primary)' }}>Staff Manual Order Entry</span>
+              </h3>
+              <button className="btn btn-ghost btn-icon" onClick={() => setShowManualOrderModal(false)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '36px', width: '36px' }}><X size={18} /></button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', overflowY: 'auto', padding: '0.25rem', flex: 1 }}>
+              {/* Top Controls: Single row for Select Table, Search, and Cooking Notes */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr 1.1fr', gap: '0.75rem', alignItems: 'end' }}>
+                <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  <label className="form-label" style={{ 
+                    fontSize: '0.72rem', 
+                    fontWeight: 800, 
+                    color: 'var(--text-secondary)', 
+                    textTransform: 'uppercase', 
+                    letterSpacing: '0.5px' 
+                  }}>
+                    Select Table *
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <select 
+                      id="manual-order-table-select"
+                      value={manualOrderTable} 
+                      onChange={e => setManualOrderTable(e.target.value)}
+                      className="form-control"
+                      style={{ 
+                        background: 'var(--bg-hover)', 
+                        color: 'var(--text-primary)',
+                        border: '1.5px solid var(--border)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '0.65rem 0.85rem',
+                        fontSize: '0.88rem',
+                        width: '100%',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        appearance: 'none',
+                        WebkitAppearance: 'none',
+                        height: '38.5px'
+                      }}
+                    >
+                      <option value="">-- Choose a table --</option>
+                      {tablesList.map(t => (
+                        <option key={t.id} value={t.tableNumber}>Table {t.tableNumber} {t.isActive ? '' : '(Inactive)'}</option>
+                      ))}
+                    </select>
+                    <div style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      pointerEvents: 'none',
+                      color: 'var(--text-muted)',
+                      fontSize: '0.75rem',
+                      fontWeight: 800
+                    }}>▼</div>
+                  </div>
+                </div>
+
+                <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  <label className="form-label" style={{ 
+                    fontSize: '0.72rem', 
+                    fontWeight: 800, 
+                    color: 'var(--text-secondary)', 
+                    textTransform: 'uppercase', 
+                    letterSpacing: '0.5px' 
+                  }}>
+                    Search Items
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="Search by name..." 
+                      value={manualOrderSearch}
+                      onChange={e => setManualOrderSearch(e.target.value)}
+                      style={{ 
+                        background: 'var(--bg-hover)', 
+                        color: 'var(--text-primary)',
+                        border: '1.5px solid var(--border)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '0.65rem 0.85rem 0.65rem 2.25rem',
+                        fontSize: '0.88rem',
+                        width: '100%',
+                        height: '38.5px'
+                      }}
+                    />
+                    <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }}>
+                      <Search size={16} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  <label className="form-label" style={{ 
+                    fontSize: '0.72rem', 
+                    fontWeight: 800, 
+                    color: 'var(--text-secondary)', 
+                    textTransform: 'uppercase', 
+                    letterSpacing: '0.5px' 
+                  }}>
+                    Special Notes
+                  </label>
+                  <input
+                    id="manual-order-notes-input"
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. Extra spicy..."
+                    value={manualOrderNotes}
+                    onChange={e => setManualOrderNotes(e.target.value)}
+                    style={{ 
+                      background: 'var(--bg-hover)', 
+                      color: 'var(--text-primary)',
+                      border: '1.5px solid var(--border)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '0.65rem 0.85rem',
+                      fontSize: '0.88rem',
+                      width: '100%',
+                      height: '38.5px'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Split Content: Items Picker vs Cart Summary */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(0, 0.75fr)', gap: '1.5rem', alignItems: 'stretch' }}>
+                
+                {/* Left Side: Items Catalog */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div style={{ 
+                    maxHeight: '380px', 
+                    overflowY: 'auto', 
+                    border: '1.5px solid var(--border)', 
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '0.75rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.5rem',
+                    background: 'var(--bg-hover)'
+                  }}>
+                    {menuItems.filter(item => item.name.toLowerCase().includes(manualOrderSearch.toLowerCase())).length === 0 ? (
+                      <div style={{ padding: '2rem 1rem', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 800, textAlign: 'center' }}>
+                        No matching items found
+                      </div>
+                    ) : (
+                      menuItems
+                        .filter(item => item.name.toLowerCase().includes(manualOrderSearch.toLowerCase()))
+                        .map(item => {
+                          const inCart = manualOrderItems.get(item.id);
+                          return (
+                            <div 
+                              key={item.id} 
+                              style={{ 
+                                display: 'flex', 
+                                justifyContent: 'space-between', 
+                                alignItems: 'center', 
+                                padding: '0.75rem 1rem', 
+                                background: 'var(--bg-surface)', 
+                                borderRadius: 'var(--radius-md)',
+                                border: '1px solid var(--border)',
+                                boxShadow: 'var(--shadow-sm)',
+                                transition: 'all 0.2s ease',
+                              }}
+                            >
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                                <span style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--text-primary)' }}>{item.name}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                  <span style={{ 
+                                    fontSize: '0.78rem', 
+                                    color: 'var(--accent)', 
+                                    fontWeight: 800,
+                                    background: 'var(--accent-glow)',
+                                    padding: '0.1rem 0.45rem',
+                                    borderRadius: 'var(--radius-sm)'
+                                  }}>
+                                    ₹{item.price.toFixed(2)}
+                                  </span>
+                                  {item.category && (
+                                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                      in {item.category.name}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                {inCart ? (
+                                  <div style={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    background: 'var(--bg-hover)', 
+                                    borderRadius: 'var(--radius-sm)',
+                                    border: '1.5px solid var(--border)',
+                                    padding: '0.15rem'
+                                  }}>
+                                    <button 
+                                      className="btn btn-ghost btn-sm btn-icon" 
+                                      onClick={() => updateManualItemQty(item.id, -1)}
+                                      style={{ width: '28px', height: '28px', minWidth: '28px', borderRadius: 'var(--radius-sm)' }}
+                                    >
+                                      <Minus size={12} />
+                                    </button>
+                                    <span style={{ fontWeight: 800, minWidth: '26px', textAlign: 'center', fontSize: '0.88rem', color: 'var(--text-primary)' }}>
+                                      {inCart.quantity}
+                                    </span>
+                                    <button 
+                                      className="btn btn-ghost btn-sm btn-icon" 
+                                      onClick={() => updateManualItemQty(item.id, 1)}
+                                      style={{ width: '28px', height: '28px', minWidth: '28px', borderRadius: 'var(--radius-sm)' }}
+                                    >
+                                      <Plus size={12} />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button 
+                                    className="btn btn-primary btn-sm" 
+                                    onClick={() => updateManualItemQty(item.id, 1, item)}
+                                    style={{ 
+                                      padding: '0.45rem 1rem', 
+                                      fontSize: '0.8rem', 
+                                      fontWeight: 800,
+                                      borderRadius: 'var(--radius-md)'
+                                    }}
+                                  >
+                                    Add
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Side: Selected Summary */}
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  border: '1.5px solid var(--border)', 
+                  borderRadius: 'var(--radius-lg)', 
+                  padding: '1.25rem',
+                  background: 'var(--bg-hover)',
+                  boxShadow: 'var(--shadow-sm)'
+                }}>
+                  <span style={{ 
+                    fontWeight: 800, 
+                    fontSize: '0.72rem', 
+                    textTransform: 'uppercase', 
+                    color: 'var(--text-secondary)', 
+                    letterSpacing: '0.5px',
+                    marginBottom: '0.85rem', 
+                    display: 'block' 
+                  }}>
+                    Selected Summary
+                  </span>
+                  
+                  <div style={{ 
+                    flex: 1, 
+                    overflowY: 'auto', 
+                    maxHeight: '220px', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    gap: '0.5rem', 
+                    marginBottom: '1rem',
+                    paddingRight: '0.25rem'
+                  }}>
+                    {manualOrderItems.size === 0 ? (
+                      <div style={{ 
+                        margin: 'auto 0',
+                        textAlign: 'center', 
+                        padding: '2.5rem 0',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '0.5rem'
+                      }}>
+                        <span style={{ fontSize: '1.75rem' }}>🛒</span>
+                        <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>Empty cart</span>
+                      </div>
+                    ) : (
+                      Array.from(manualOrderItems.values()).map(item => (
+                        <div 
+                          key={item.id} 
+                          style={{ 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center',
+                            fontSize: '0.88rem',
+                            paddingBottom: '0.5rem',
+                            borderBottom: '1px dashed var(--border-light, var(--border))'
+                          }}
+                        >
+                          <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{item.name}</span>
+                          <span style={{ 
+                            background: 'var(--accent-glow)', 
+                            color: 'var(--accent)', 
+                            fontWeight: 800, 
+                            fontSize: '0.75rem',
+                            padding: '0.15rem 0.55rem',
+                            borderRadius: '999px',
+                            border: '1.5px solid var(--border-light, var(--border))',
+                            lineHeight: '1.2'
+                          }}>
+                            {item.quantity}x
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  
+                  <div style={{ 
+                    borderTop: '1.5px solid var(--border)', 
+                    paddingTop: '0.85rem', 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'baseline',
+                    fontWeight: 800, 
+                    fontSize: '1rem', 
+                    marginBottom: '1.15rem' 
+                  }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Total Bill:</span>
+                    <span style={{ color: 'var(--accent)', fontSize: '1.35rem', fontWeight: 900 }}>
+                      ₹{Array.from(manualOrderItems.values()).reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2)}
+                    </span>
+                  </div>
+                  <button 
+                    id="confirm-manual-order-btn"
+                    className="btn btn-primary btn-full" 
+                    onClick={submitManualOrder}
+                    disabled={placingManualOrder || manualOrderItems.size === 0 || !manualOrderTable}
+                    style={{
+                      padding: '0.75rem 1rem',
+                      fontWeight: 800,
+                      fontSize: '0.9rem',
+                      boxShadow: '0 4px 12px rgba(3, 77, 55, 0.1)',
+                      borderRadius: 'var(--radius-md)',
+                      minHeight: 44
+                    }}
+                  >
+                    {placingManualOrder ? 'Placing Order...' : 'Confirm Order'}
+                  </button>
+                </div>
+
+              </div>
+            </div>
           </div>
         </div>
       )}

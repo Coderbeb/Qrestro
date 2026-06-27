@@ -48,10 +48,15 @@ export async function PUT(
   const { id } = await params;
   try {
     const body = await request.json();
-    const { status } = body;
+    const { status, cancellationReason } = body;
 
     if (!status || !VALID_STATUSES.includes(status)) {
       return NextResponse.json({ success: false, error: { code: 'INVALID_STATUS', message: `Status must be one of: ${VALID_STATUSES.join(', ')}` } }, { status: 400 });
+    }
+
+    // Require a cancellation reason when cancelling
+    if (status === 'cancelled' && (!cancellationReason || !cancellationReason.trim())) {
+      return NextResponse.json({ success: false, error: { code: 'MISSING_REASON', message: 'A cancellation reason is required when cancelling an order' } }, { status: 400 });
     }
 
     const existing = await prisma.order.findFirst({ where: { id, ownerId: user.id } });
@@ -62,6 +67,7 @@ export async function PUT(
       data: {
         status,
         ...(status === 'completed' && { completedAt: new Date() }),
+        ...(status === 'cancelled' && { cancellationReason: cancellationReason.trim() }),
       },
       include: {
         items: true,

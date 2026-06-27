@@ -2335,25 +2335,25 @@ input::-ms-clear {
 }
 .page-header h1 {
   font-family: 'Cormorant Garamond', Georgia, serif;
-  font-size: 2.3rem;
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.01em;
   line-height: 1.15;
 }
 .page-header p {
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   color: var(--text-secondary);
-  margin-top: 0.35rem;
+  margin-top: 0.2rem;
   font-weight: 500;
 }
 .page-header-pretitle {
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.15em;
   color: var(--accent); /* Emerald Green in light mode, Champagne Gold in dark mode */
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.15rem;
   display: block;
 }
 
@@ -3943,5 +3943,39 @@ input::-ms-clear {
   .desktop-mockup {
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18) !important;
     border-color: rgba(3, 77, 55, 0.08) !important;
+  }
+}
+
+/* ─── Skeleton Loading Animation ───────────────────────────── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-hover) 25%,
+    var(--border) 50%,
+    var(--bg-hover) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-wave 1.6s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-text {
+  border-radius: 4px;
+}
+
+@keyframes skeleton-wave {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── Toast / Alert Animations ─────────────────────────────── */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
   }
 }

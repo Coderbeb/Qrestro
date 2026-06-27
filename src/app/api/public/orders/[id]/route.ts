@@ -32,6 +32,7 @@ export async function GET(
         tableNumber: true,
         createdAt: true,
         ownerId: true,
+        cancellationReason: true,
         items: {
           select: { menuItemName: true, quantity: true, price: true }
         }

@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback, useRef, use, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Sun, Moon, ShoppingBag, Utensils, Clock, X } from 'lucide-react';
+import { Sun, Moon, ShoppingBag, Utensils, Clock, X, Bell, Droplets } from 'lucide-react';
 import { useSocket } from '@/lib/useSocket';
 
 type MenuItem = { id: string; name: string; description: string | null; price: number; imageUrl: string | null; preparationTime: number; categoryId: string | null; };
@@ -14,6 +14,7 @@ type OrderStatus = {
   totalAmount: number;
   estimatedTime: number;
   tableNumber: number;
+  cancellationReason?: string | null;
   items: { menuItemName: string; quantity: number; price?: number }[];
 };
 
@@ -37,58 +38,49 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
   const [liveOrders, setLiveOrders] = useState<OrderStatus[]>([]);
   const [showTracking, setShowTracking] = useState(false);
   const tabBarRef = useRef<HTMLDivElement>(null);
+  const [notes, setNotes] = useState('');
+  const [waiterCooldown, setWaiterCooldown] = useState(false);
+  const [waterCooldown, setWaterCooldown] = useState(false);
+  const [toast, setToast] = useState('');
+  const [hasWaterItem, setHasWaterItem] = useState(false);
 
-  // Load tracked orders from localStorage and check their live status
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
+
+  // Load tracked orders for this table session from the database
   const loadTrackedOrders = useCallback(async () => {
     if (typeof window === 'undefined') return;
-    const storedIds = JSON.parse(localStorage.getItem('placedOrderIds') || '[]');
-    if (storedIds.length === 0) {
+    const storageKey = `sessionToken_${ownerId}_${tableNumber}`;
+    const sessionToken = sessionStorage.getItem(storageKey);
+    if (!sessionToken) {
       setLiveOrders([]);
       return;
     }
     
     try {
-      const results = await Promise.all(
-        storedIds.map(async (id: string) => {
-          try {
-            const res = await fetch(`/api/public/orders/${id}`);
-            const data = await res.json();
-            
-            // If the order has been reset/cleared from the table session, remove it
-            if (!data.success && data.error?.code === 'SESSION_RESET') {
-              return { id, isExpired: true };
-            }
-            return data.success ? data.data : null;
-          } catch {
-            return null;
-          }
-        })
-      );
+      const res = await fetch(`/api/public/orders?ownerId=${ownerId}&tableNumber=${tableNumber}&sessionToken=${sessionToken}`);
+      const data = await res.json();
       
-      // Filter out nulls and expired ones, and clean up expired IDs from localStorage
-      const expiredIds = results.filter(r => r && r.isExpired).map(r => r.id);
-      if (expiredIds.length > 0) {
-        const stored = JSON.parse(localStorage.getItem('placedOrderIds') || '[]');
-        const updated = stored.filter((id: string) => !expiredIds.includes(id));
-        localStorage.setItem('placedOrderIds', JSON.stringify(updated));
+      if (!data.success) {
+        if (data.error?.code === 'SESSION_EXPIRED') {
+          setLiveOrders([]);
+          setShowTracking(false);
+        }
+        return;
       }
-
-      const active = results.filter((o): o is any => 
-        o !== null && !o.isExpired && o.status !== 'cancelled' && o.tableNumber === parseInt(tableNumber)
-      ).map(o => ({
+      
+      const active = (data.data || []).filter((o: any) => o.status !== 'cancelled').map((o: any) => ({
         ...o,
         totalAmount: parseFloat(o.totalAmount.toString()),
         items: o.items.map((i: any) => ({
           ...i,
-          price: parseFloat(i.price.toString())
+          price: i.price ? parseFloat(i.price.toString()) : undefined
         }))
       }));
-      
       setLiveOrders(active);
     } catch (err) {
-      console.error('Error loading tracked orders:', err);
+      console.error('Error loading session orders:', err);
     }
-  }, []);
+  }, [ownerId, tableNumber]);
 
   useEffect(() => {
     loadTrackedOrders();
@@ -113,20 +105,61 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
       if (!newOrder || !newOrder.id) return;
       if (newOrder.tableNumber !== parseInt(tableNumber)) return;
       
-      const storedIds = JSON.parse(localStorage.getItem('placedOrderIds') || '[]');
-      if (storedIds.includes(newOrder.id)) {
-        setLiveOrders(prev => {
-          if (prev.some(o => o.id === newOrder.id)) return prev;
-          return [...prev, {
-            ...newOrder,
-            totalAmount: parseFloat(newOrder.totalAmount.toString()),
-            items: newOrder.items.map((i: any) => ({
-              ...i,
-              price: parseFloat(i.price.toString())
-            }))
-          }];
-        });
+      setLiveOrders(prev => {
+        if (prev.some(o => o.id === newOrder.id)) return prev;
+        return [...prev, {
+          ...newOrder,
+          totalAmount: parseFloat(newOrder.totalAmount.toString()),
+          items: newOrder.items.map((i: any) => ({
+            ...i,
+            price: i.price ? parseFloat(i.price.toString()) : undefined
+          }))
+        }];
+      });
+    },
+    'menu:updated': (data: unknown) => {
+      const payload = data as { id: string; name: string; description: string | null; price: number; imageUrl: string | null; preparationTime: number; isAvailable: boolean; categoryId: string | null };
+      if (!payload || !payload.id) return;
+      console.log('🔌 [Socket.io] Menu item updated in real-time:', payload);
+
+      const updateItem = (item: MenuItem): MenuItem => item.id === payload.id ? {
+        id: item.id,
+        name: payload.name,
+        description: payload.description,
+        price: payload.price,
+        imageUrl: payload.imageUrl,
+        preparationTime: payload.preparationTime,
+        categoryId: payload.categoryId
+      } : item;
+
+      if (payload.isAvailable === false) {
+        // If item is marked unavailable, remove it from the menu lists
+        setCategories(prev => prev.map(cat => ({
+          ...cat,
+          items: cat.items.filter(item => item.id !== payload.id)
+        })).filter(cat => cat.items.length > 0));
+        setUncategorized(prev => prev.filter(item => item.id !== payload.id));
+        setAllItems(prev => prev.filter(item => item.id !== payload.id));
+      } else {
+        setCategories(prev => prev.map(cat => ({
+          ...cat,
+          items: cat.items.map(updateItem)
+        })));
+        setUncategorized(prev => prev.map(updateItem));
+        setAllItems(prev => prev.map(updateItem));
       }
+    },
+    'menu:deleted': (data: unknown) => {
+      const payload = data as { id: string };
+      if (!payload || !payload.id) return;
+      console.log('🔌 [Socket.io] Menu item deleted in real-time:', payload);
+
+      setCategories(prev => prev.map(cat => ({
+        ...cat,
+        items: cat.items.filter(item => item.id !== payload.id)
+      })).filter(cat => cat.items.length > 0));
+      setUncategorized(prev => prev.filter(item => item.id !== payload.id));
+      setAllItems(prev => prev.filter(item => item.id !== payload.id));
     },
     'table:reset': (data: unknown) => {
       const payload = data as { tableNumber: number };
@@ -204,6 +237,9 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
         sessionStorage.setItem(storageKey, data.data.sessionToken);
       }
 
+      // Load orders since the session token is now available
+      loadTrackedOrders();
+
       // Clean the URL query params so they can't reload or bookmark the code param from browser history
       if (code) {
         window.history.replaceState({}, '', window.location.pathname);
@@ -213,6 +249,9 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
       setCategories(data.data.categories || []);
       setUncategorized(data.data.uncategorized || []);
       setAllItems(data.data.items || []);
+      // Check if the restaurant has a "water" menu item
+      const items: MenuItem[] = data.data.items || [];
+      setHasWaterItem(items.some(i => i.name.toLowerCase().includes('water')));
     } catch {
       setError('Failed to load menu');
     } finally {
@@ -248,6 +287,7 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
           ownerId, 
           tableNumber: parseInt(tableNumber), 
           items: cartItems.map(c => ({ menuItemId: c.menuItem.id, quantity: c.quantity })),
+          notes: notes.trim() || undefined,
           sessionToken
         }) 
       });
@@ -269,6 +309,7 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
         localStorage.setItem('placedOrderIds', JSON.stringify(storedIds));
       }
       
+      setNotes('');
       router.push(`/order/${ownerId}/${tableNumber}/success?orderId=${data.data.id}&total=${cartTotal.toFixed(2)}&time=${data.data.estimatedTime}`);
     } finally { setPlacing(false); }
   }
@@ -285,7 +326,65 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
     : activeTab === 'uncategorized' ? uncategorized
     : (categories.find(c => c.id === activeTab)?.items || []);
 
-  if (loading) return <div className="loading-center" style={{ minHeight: '100vh' }}><div className="spinner" style={{ width: 40, height: 40 }} /><span>Loading menu…</span></div>;
+  async function sendServiceRequest(type: 'waiter' | 'water') {
+    const setCooldown = type === 'waiter' ? setWaiterCooldown : setWaterCooldown;
+    setCooldown(true);
+    setTimeout(() => setCooldown(false), 30000);
+    try {
+      const storageKey = `sessionToken_${ownerId}_${tableNumber}`;
+      const sessionToken = typeof window !== 'undefined' ? sessionStorage.getItem(storageKey) : null;
+      const res = await fetch('/api/service-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ownerId, tableNumber: parseInt(tableNumber), type, sessionToken }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(type === 'waiter' ? '🛎 Waiter has been notified!' : '💧 Water order placed!');
+        if (type === 'water' && data.data?.order) {
+          const storedIds = JSON.parse(localStorage.getItem('placedOrderIds') || '[]');
+          if (!storedIds.includes(data.data.order.id)) {
+            storedIds.push(data.data.order.id);
+            localStorage.setItem('placedOrderIds', JSON.stringify(storedIds));
+          }
+          loadTrackedOrders();
+        }
+      } else {
+        showToast(data.error?.message || 'Request failed');
+      }
+    } catch {
+      showToast('Network error. Please try again.');
+    }
+  }
+
+  if (loading) return (
+    <div className="order-page">
+      <header className="order-header">
+        <div style={{ flex: 1 }}>
+          <div className="skeleton skeleton-text" style={{ width: '60%', height: 20, marginBottom: 6 }} />
+          <div className="skeleton skeleton-text" style={{ width: '40%', height: 14 }} />
+        </div>
+      </header>
+      <div style={{ display: 'flex', gap: '0.5rem', padding: '0 1rem', marginBottom: '1rem', overflow: 'hidden' }}>
+        {[1,2,3,4].map(i => <div key={i} className="skeleton" style={{ width: 72, height: 32, borderRadius: 999, flexShrink: 0 }} />)}
+      </div>
+      <div className="order-menu-grid">
+        {[1,2,3,4,5,6].map(i => (
+          <div key={i} className="order-item-card">
+            <div className="order-item-img skeleton" />
+            <div className="order-item-body">
+              <div className="skeleton skeleton-text" style={{ width: '70%', height: 16, marginBottom: 8 }} />
+              <div className="skeleton skeleton-text" style={{ width: '90%', height: 12, marginBottom: 12 }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="skeleton skeleton-text" style={{ width: 50, height: 16 }} />
+                <div className="skeleton" style={{ width: 64, height: 30, borderRadius: 'var(--radius-sm)' }} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
   if (error) return (
     <div className="loading-center" style={{ minHeight: '100vh', textAlign: 'center', padding: '2rem', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
       <div style={{ fontSize: '3.5rem', marginBottom: '1rem' }}>😕</div>
@@ -378,6 +477,55 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
         </div>
       )}
 
+      {/* Floating service buttons */}
+      <div className="service-fab-bar" style={{
+        position: 'fixed',
+        bottom: cartCount > 0 ? 80 : 16,
+        right: 16,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.5rem',
+        zIndex: 900,
+        transition: 'bottom 0.3s var(--transition)',
+      }}>
+        <button
+          id="call-waiter-btn"
+          className="btn btn-sm"
+          disabled={waiterCooldown}
+          onClick={() => sendServiceRequest('waiter')}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+            background: 'var(--card-bg)', border: '1.5px solid var(--border)',
+            color: 'var(--text-primary)', boxShadow: 'var(--shadow-md)',
+            borderRadius: 'var(--radius-md)', padding: '0.6rem 1rem',
+            fontWeight: 700, fontSize: '0.82rem',
+            opacity: waiterCooldown ? 0.5 : 1,
+            minHeight: 44,
+          }}
+        >
+          <Bell size={16} /> {waiterCooldown ? 'Sent ✓' : 'Call Waiter'}
+        </button>
+        {hasWaterItem && (
+          <button
+            id="quick-water-btn"
+            className="btn btn-sm"
+            disabled={waterCooldown}
+            onClick={() => sendServiceRequest('water')}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+              background: 'var(--card-bg)', border: '1.5px solid var(--accent)',
+              color: 'var(--accent)', boxShadow: 'var(--shadow-md)',
+              borderRadius: 'var(--radius-md)', padding: '0.6rem 1rem',
+              fontWeight: 700, fontSize: '0.82rem',
+              opacity: waterCooldown ? 0.5 : 1,
+              minHeight: 44,
+            }}
+          >
+            <Droplets size={16} /> {waterCooldown ? 'Ordered ✓' : 'Water'}
+          </button>
+        )}
+      </div>
+
       {/* Cart bar */}
       {cartCount > 0 && !showCart && (
         <div className="cart-bar" onClick={() => setShowCart(true)} style={{ cursor: 'pointer' }}>
@@ -406,6 +554,30 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
                   <div style={{ fontWeight: 700, minWidth: 56, textAlign: 'right', fontSize: '0.9rem' }}>₹{(c.menuItem.price * c.quantity).toFixed(2)}</div>
                 </div>
               ))}
+            </div>
+            {/* Special Instructions */}
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '0.35rem' }}>📝 Special instructions (optional)</label>
+              <textarea
+                id="order-notes-input"
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="e.g. No onions, extra spicy, allergies…"
+                maxLength={500}
+                rows={2}
+                style={{
+                  width: '100%',
+                  padding: '0.6rem 0.75rem',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-hover)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.85rem',
+                  resize: 'vertical',
+                  fontFamily: 'inherit',
+                  transition: 'border-color 0.2s',
+                }}
+              />
             </div>
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontWeight: 700 }}>Total</span>
@@ -548,6 +720,13 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
                           ))}
                         </div>
 
+                        {/* Cancellation reason */}
+                        {isCancelled && order.cancellationReason && (
+                          <div style={{ marginTop: '0.5rem', padding: '0.5rem 0.6rem', background: 'rgba(220,38,38,0.08)', borderRadius: 'var(--radius-sm)', fontSize: '0.78rem', color: 'var(--status-cancelled)' }}>
+                            ❌ <strong>Reason:</strong> {order.cancellationReason}
+                          </div>
+                        )}
+
                         <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border)', marginTop: '0.5rem', paddingTop: '0.4rem', fontSize: '0.78rem' }}>
                           <span style={{ color: 'var(--text-muted)' }}>Est. Time: ~{order.estimatedTime} min</span>
                           <span style={{ fontWeight: 700, color: 'var(--accent)' }}>₹{parseFloat(order.totalAmount.toString()).toFixed(2)}</span>
@@ -559,6 +738,19 @@ export default function OrderPage({ params }: { params: Promise<{ ownerId: strin
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 100, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--text-primary)', color: 'var(--bg)', padding: '0.7rem 1.25rem',
+          borderRadius: 'var(--radius-md)', fontSize: '0.85rem', fontWeight: 600,
+          zIndex: 9999, boxShadow: 'var(--shadow-lg)', animation: 'fadeInUp 0.3s ease',
+          whiteSpace: 'nowrap',
+        }}>
+          {toast}
         </div>
       )}
     </div>

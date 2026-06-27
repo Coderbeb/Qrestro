@@ -114,15 +114,17 @@ model MenuItem {
 }
 
 model Order {
-  id            String    @id @default(uuid()) @db.Uuid
-  ownerId       String    @map("owner_id") @db.Uuid
-  tableNumber   Int       @map("table_number")
-  totalAmount   Decimal   @map("total_amount") @db.Decimal(10, 2)
-  estimatedTime Int       @map("estimated_time")
-  status        String    @default("pending") @db.VarChar(50)
-  createdAt     DateTime  @default(now()) @map("created_at")
-  completedAt   DateTime? @map("completed_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  id                 String    @id @default(uuid()) @db.Uuid
+  ownerId            String    @map("owner_id") @db.Uuid
+  tableNumber        Int       @map("table_number")
+  totalAmount        Decimal   @map("total_amount") @db.Decimal(10, 2)
+  estimatedTime      Int       @map("estimated_time")
+  status             String    @default("pending") @db.VarChar(50)
+  notes              String?   @db.Text
+  cancellationReason String?   @map("cancellation_reason") @db.Text
+  createdAt          DateTime  @default(now()) @map("created_at")
+  completedAt        DateTime? @map("completed_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   owner Owner       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   items OrderItem[]

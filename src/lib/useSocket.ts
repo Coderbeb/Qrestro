@@ -37,17 +37,20 @@ export function useSocket(
 
     socket.on('connect', () => {
       connectedRef.current = true;
+      console.log(`🔌 [Socket.io] Connected successfully! Room: restaurant:${ownerId}`);
       socket.emit('join-restaurant', ownerId);
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
       connectedRef.current = false;
+      console.log(`🔌 [Socket.io] Disconnected. Reason: ${reason}`);
     });
 
     // Attach event listeners
     const eventNames = Object.keys(listenersRef.current);
     for (const event of eventNames) {
       socket.on(event, (data: unknown) => {
+        console.log(`🔌 [Socket.io] Received event "${event}":`, data);
         listenersRef.current[event]?.(data);
       });
     }

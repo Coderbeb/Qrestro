@@ -1,6 +1,7 @@
 import prisma from '@/lib/db';
 import { authenticateRequest } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { emitToRestaurant } from '@/lib/socketServer';
 
 export async function GET(
   request: NextRequest,
@@ -52,7 +53,16 @@ export async function PUT(
       },
       include: { category: { select: { id: true, name: true, sortOrder: true } } },
     });
-    return NextResponse.json({ success: true, data: { ...updated, price: parseFloat(updated.price.toString()) } });
+
+    const formatted = {
+      ...updated,
+      price: parseFloat(updated.price.toString())
+    };
+
+    // Broadcast menu item update to all connected customers
+    emitToRestaurant(user.id, 'menu:updated', formatted);
+
+    return NextResponse.json({ success: true, data: formatted });
   } catch (error) {
     console.error('Update menu item error:', error);
     return NextResponse.json({ success: false, error: { code: 'SERVER_ERROR', message: 'Failed to update menu item' } }, { status: 500 });
@@ -72,6 +82,10 @@ export async function DELETE(
     if (!existing) return NextResponse.json({ success: false, error: { code: 'NOT_FOUND', message: 'Menu item not found' } }, { status: 404 });
 
     await prisma.menuItem.delete({ where: { id } });
+
+    // Broadcast menu item deletion to all connected customers
+    emitToRestaurant(user.id, 'menu:deleted', { id });
+
     return NextResponse.json({ success: true, message: 'Menu item deleted' });
   } catch (error) {
     console.error('Delete menu item error:', error);

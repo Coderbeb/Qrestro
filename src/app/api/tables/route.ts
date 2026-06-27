@@ -19,7 +19,8 @@ export async function GET(request: NextRequest) {
     const requestHost = request.headers.get('host');
     for (const table of tables) {
       const isJson = table.qrCodeData && (table.qrCodeData.startsWith('{') || table.qrCodeData.startsWith('['));
-      const isLocalhost = table.qrCodeData && table.qrCodeData.includes('localhost');
+      // Only treat it as invalid localhost if the request is NOT on localhost (e.g. deployed to production)
+      const isLocalhost = table.qrCodeData && table.qrCodeData.includes('localhost') && !requestHost?.includes('localhost');
       
       let hasValidSignature = false;
       if (table.qrCodeData && !isJson && !isLocalhost) {

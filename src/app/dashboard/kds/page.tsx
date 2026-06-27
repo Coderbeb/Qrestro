@@ -16,6 +16,7 @@ type Order = {
   status: 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled';
   estimatedTime: number;
   createdAt: string;
+  notes?: string | null;
   items: OrderItem[];
 };
 
@@ -113,7 +114,32 @@ export default function KDSPage() {
     return 'kds-fresh';
   }
 
-  if (loading) return <div className="loading-center"><div className="spinner" /><span>Loading KDS screen…</span></div>;
+  if (loading) return (
+    <div>
+      <div className="page-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
+        <div>
+          <div className="skeleton skeleton-text" style={{ width: 180, height: 14, marginBottom: 6 }} />
+          <div className="skeleton skeleton-text" style={{ width: 220, height: 28, marginBottom: 6 }} />
+          <div className="skeleton skeleton-text" style={{ width: 280, height: 14 }} />
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.5rem' }}>
+        {[1,2,3,4].map(i => (
+          <div key={i} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between' }}>
+              <div className="skeleton" style={{ width: 56, height: 36, borderRadius: 'var(--radius-md)' }} />
+              <div className="skeleton" style={{ width: 44, height: 24, borderRadius: 999 }} />
+            </div>
+            <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+              <div className="skeleton skeleton-text" style={{ width: '85%', height: 18 }} />
+              <div className="skeleton skeleton-text" style={{ width: '70%', height: 18 }} />
+              <div className="skeleton skeleton-text" style={{ width: '55%', height: 18 }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -289,6 +315,25 @@ export default function KDSPage() {
                       </div>
                     ))}
                   </div>
+
+                  {/* Chef notes */}
+                  {order.notes && (
+                    <div style={{
+                      padding: '0.5rem 0.65rem',
+                      background: 'rgba(217, 119, 6, 0.1)',
+                      border: '1px solid rgba(217, 119, 6, 0.25)',
+                      borderRadius: 'var(--radius-sm)',
+                      fontSize: '0.88rem',
+                      fontWeight: 600,
+                      color: 'var(--status-preparing)',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '0.4rem',
+                    }}>
+                      <span style={{ fontSize: '1rem' }}>✍️</span>
+                      <span>{order.notes}</span>
+                    </div>
+                  )}
 
                   <div style={{ marginTop: 'auto', fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between' }}>
                     <span>Placed: {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
