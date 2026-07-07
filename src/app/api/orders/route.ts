@@ -1,5 +1,5 @@
 import prisma from '@/lib/db';
-import { authenticateRequest } from '@/lib/auth';
+import { authenticateRequest, authenticateAnyRequest } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { isRateLimited } from '@/lib/rateLimit';
 import { emitToRestaurant } from '@/lib/socketServer';
@@ -8,8 +8,11 @@ import { getTableSignature } from '@/lib/security';
 const VALID_STATUSES = ['pending', 'preparing', 'ready', 'completed', 'cancelled'];
 
 export async function GET(request: NextRequest) {
-  const user = authenticateRequest(request);
-  if (!user) return NextResponse.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
+  // Accept both owner and staff tokens
+  const auth = authenticateAnyRequest(request);
+  if (!auth) return NextResponse.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
+
+  const ownerId = auth.type === 'owner' ? auth.user.id : auth.staff.ownerId;
 
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -17,7 +20,7 @@ export async function GET(request: NextRequest) {
     const tableNumber = searchParams.get('tableNumber');
     const limit = parseInt(searchParams.get('limit') || '50');
 
-    const where: Record<string, unknown> = { ownerId: user.id };
+    const where: Record<string, unknown> = { ownerId };
     if (status) where.status = status;
     if (tableNumber) where.tableNumber = parseInt(tableNumber);
 
@@ -50,12 +53,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Check if the request is from an authenticated staff member (dashboard)
-    const user = authenticateRequest(request);
-    const isStaff = !!user;
+    // Check if the request is from an authenticated owner or staff member
+    const auth = authenticateAnyRequest(request);
+    const isAuthenticated = !!auth;
+    const isOwnerAuth = auth?.type === 'owner';
+    const isStaffAuth = auth?.type === 'staff';
 
-    // Rate limit only applies to public customers, not staff
-    if (!isStaff && isRateLimited(request, 10, 60000)) {
+    // Rate limit only applies to public customers, not authenticated users
+    if (!isAuthenticated && isRateLimited(request, 10, 60000)) {
       return NextResponse.json(
         { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Too many orders placed from this device. Please wait a moment.' } },
         { status: 429 }
@@ -65,9 +70,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     let { ownerId, tableNumber, items, sessionToken, notes } = body;
 
-    // For staff orders, ownerId is the authenticated user's ID
-    if (isStaff && user) {
-      ownerId = user.id;
+    // Determine ownerId and placedBy based on auth type
+    let placedBy: string | null = null;
+    if (isOwnerAuth && auth.type === 'owner') {
+      ownerId = auth.user.id;
+      placedBy = 'OWNER';
+    } else if (isStaffAuth && auth.type === 'staff') {
+      ownerId = auth.staff.ownerId;
+      placedBy = `WAITER:${auth.staff.name}`;
+    } else {
+      placedBy = 'QR';
     }
 
     if (!ownerId || !tableNumber || !items || !Array.isArray(items) || items.length === 0) {
@@ -79,7 +91,7 @@ export async function POST(request: NextRequest) {
     if (!table) return NextResponse.json({ success: false, error: { code: 'NOT_FOUND', message: 'Table not found or inactive' } }, { status: 404 });
 
     // Verify table session token to prevent URL tampering and ordering after reset (customers only)
-    if (!isStaff) {
+    if (!isAuthenticated) {
       const { verifySessionToken } = require('@/lib/security');
       if (!sessionToken || !verifySessionToken(sessionToken, table.updatedAt)) {
         return NextResponse.json(
@@ -126,6 +138,7 @@ export async function POST(request: NextRequest) {
         totalAmount,
         estimatedTime: maxPrepTime,
         status: 'pending',
+        placedBy,
         notes: notes?.trim() || null,
         items: { create: orderItems },
       },

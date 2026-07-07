@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 
 /**
@@ -18,10 +18,13 @@ export function useSocket(
   listeners: Record<string, (data: unknown) => void> = {}
 ): { connected: boolean } {
   const socketRef = useRef<Socket | null>(null);
-  const connectedRef = useRef(false);
+  const [connected, setConnected] = useState(false);
   // Store listeners in a ref to avoid re-triggering the effect on every render
   const listenersRef = useRef(listeners);
-  listenersRef.current = listeners;
+  
+  useEffect(() => {
+    listenersRef.current = listeners;
+  }, [listeners]);
 
   const connect = useCallback(() => {
     if (!ownerId || socketRef.current?.connected) return;
@@ -36,13 +39,13 @@ export function useSocket(
     });
 
     socket.on('connect', () => {
-      connectedRef.current = true;
+      setConnected(true);
       console.log(`🔌 [Socket.io] Connected successfully! Room: restaurant:${ownerId}`);
       socket.emit('join-restaurant', ownerId);
     });
 
     socket.on('disconnect', (reason) => {
-      connectedRef.current = false;
+      setConnected(false);
       console.log(`🔌 [Socket.io] Disconnected. Reason: ${reason}`);
     });
 
@@ -65,12 +68,13 @@ export function useSocket(
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
-        connectedRef.current = false;
+        setConnected(false);
       }
     };
   }, [connect]);
 
   // Re-attach listeners when they change (new event names added)
+  const eventKeys = Object.keys(listeners).join(',');
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket) return;
@@ -83,7 +87,7 @@ export function useSocket(
         listenersRef.current[event]?.(data);
       });
     }
-  }, [Object.keys(listeners).join(',')]);
+  }, [eventKeys]);
 
-  return { connected: connectedRef.current };
+  return { connected };
 }

@@ -18,6 +18,13 @@ enum PlanTier {
   PREMIUM
 }
 
+enum StaffRole {
+  MANAGER
+  WAITER
+  CHEF
+  CASHIER
+}
+
 model SubscriptionPlan {
   id          String   @id @default(uuid()) @db.Uuid
   tier        PlanTier @unique
@@ -54,6 +61,7 @@ model Owner {
   menuItems MenuItem[]
   categories MenuCategory[]
   orders    Order[]
+  staff     Staff[]
 
   @@map("owners")
 }
@@ -120,6 +128,7 @@ model Order {
   totalAmount        Decimal   @map("total_amount") @db.Decimal(10, 2)
   estimatedTime      Int       @map("estimated_time")
   status             String    @default("pending") @db.VarChar(50)
+  placedBy           String?   @map("placed_by") @db.VarChar(100)
   notes              String?   @db.Text
   cancellationReason String?   @map("cancellation_reason") @db.Text
   createdAt          DateTime  @default(now()) @map("created_at")
@@ -150,4 +159,23 @@ model OrderItem {
   @@index([orderId])
   @@index([menuItemId])
   @@map("order_items")
+}
+
+model Staff {
+  id              String    @id @default(uuid()) @db.Uuid
+  ownerId         String    @map("owner_id") @db.Uuid
+  name            String    @db.VarChar(100)
+  phone           String?   @db.VarChar(50)
+  pinHash         String    @map("pin_hash") @db.VarChar(255)
+  role            StaffRole
+  assignedTables  Int[]     @default([]) @map("assigned_tables")
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  owner           Owner     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, phone])
+  @@index([ownerId])
+  @@map("staff")
 }

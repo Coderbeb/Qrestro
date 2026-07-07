@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { ShoppingBag, TrendingUp, Clock, Utensils, QrCode, Package, Inbox, CheckCircle2, ChevronRight } from 'lucide-react';
 import { getAuthHeader } from '@/lib/api';
+import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 import { useSocket } from '@/lib/useSocket';
 
 type Stats = {
@@ -101,7 +102,7 @@ export default function DashboardPage() {
       </div>
 
       {loading ? (
-        <div className="loading-center"><div className="spinner" /><span>Loading stats…</span></div>
+        <DashboardSkeleton type="cards" />
       ) : (
         <>
           {/* Stat Cards */}

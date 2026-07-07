@@ -1,5 +1,5 @@
 import prisma from '@/lib/db';
-import { authenticateRequest } from '@/lib/auth';
+import { authenticateAnyRequest } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { emitToRestaurant } from '@/lib/socketServer';
 
@@ -9,13 +9,15 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = authenticateRequest(request);
-  if (!user) return NextResponse.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
+  const auth = authenticateAnyRequest(request);
+  if (!auth) return NextResponse.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
+
+  const ownerId = auth.type === 'owner' ? auth.user.id : auth.staff.ownerId;
 
   const { id } = await params;
   try {
     const order = await prisma.order.findFirst({
-      where: { id, ownerId: user.id },
+      where: { id, ownerId },
       include: {
         items: {
           include: { menuItem: { select: { name: true, imageUrl: true } } },
@@ -42,8 +44,10 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = authenticateRequest(request);
-  if (!user) return NextResponse.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
+  const auth = authenticateAnyRequest(request);
+  if (!auth) return NextResponse.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
+
+  const ownerId = auth.type === 'owner' ? auth.user.id : auth.staff.ownerId;
 
   const { id } = await params;
   try {
@@ -59,7 +63,7 @@ export async function PUT(
       return NextResponse.json({ success: false, error: { code: 'MISSING_REASON', message: 'A cancellation reason is required when cancelling an order' } }, { status: 400 });
     }
 
-    const existing = await prisma.order.findFirst({ where: { id, ownerId: user.id } });
+    const existing = await prisma.order.findFirst({ where: { id, ownerId } });
     if (!existing) return NextResponse.json({ success: false, error: { code: 'NOT_FOUND', message: 'Order not found' } }, { status: 404 });
 
     const updated = await prisma.order.update({
@@ -80,8 +84,8 @@ export async function PUT(
       items: updated.items.map(item => ({ ...item, price: parseFloat(item.price.toString()) })),
     };
 
-    // Notify restaurant owner's dashboard in real-time
-    emitToRestaurant(user.id, 'order:updated', formattedOrder);
+    // Notify restaurant dashboard in real-time
+    emitToRestaurant(ownerId, 'order:updated', formattedOrder);
 
     return NextResponse.json({ success: true, data: formattedOrder });
   } catch (error) {

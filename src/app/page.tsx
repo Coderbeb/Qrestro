@@ -587,6 +587,7 @@ export default function LandingPage() {
               <h4 className="footer-col-title">Portals</h4>
               <ul className="footer-links">
                 <li><a href="/auth/login">Restaurant Admin</a></li>
+                <li><a href="/auth/login?tab=staff">Staff Login</a></li>
                 <li><a href="/auth/register">Register Business</a></li>
                 <li><a href="/superadmin">Super Admin Portal</a></li>
               </ul>

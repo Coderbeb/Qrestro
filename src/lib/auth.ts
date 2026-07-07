@@ -26,7 +26,8 @@ export function generateToken(payload: TokenPayload): string {
 
 export function verifyToken(token: string): TokenPayload | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as TokenPayload;
+    const decoded = jwt.verify(token, JWT_SECRET) as TokenPayload & { isStaff?: boolean };
+    if (decoded.isStaff) return null;
     // Bug 7 fix: old tokens issued before the role upgrade won't have a role field
     if (!decoded.role) {
       decoded.role = 'RESTAURANT_OWNER';
@@ -58,4 +59,59 @@ export function authenticateRequest(request: NextRequest): TokenPayload | null {
   const token = getTokenFromRequest(request) || request.cookies.get('token')?.value || null;
   if (!token) return null;
   return verifyToken(token);
+}
+
+// ─── Staff Authentication ─────────────────────────────────────
+
+export interface StaffTokenPayload {
+  staffId: string;
+  ownerId: string;
+  name: string;
+  role: string; // MANAGER | WAITER | CHEF | CASHIER
+}
+
+export function generateStaffToken(payload: StaffTokenPayload): string {
+  return jwt.sign(
+    { staffId: payload.staffId, ownerId: payload.ownerId, name: payload.name, role: payload.role, isStaff: true },
+    JWT_SECRET,
+    { expiresIn: '12h' }
+  );
+}
+
+export function verifyStaffToken(token: string): StaffTokenPayload | null {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as StaffTokenPayload & { isStaff?: boolean };
+    if (!decoded.isStaff) return null;
+    return { staffId: decoded.staffId, ownerId: decoded.ownerId, name: decoded.name, role: decoded.role };
+  } catch {
+    return null;
+  }
+}
+
+export function authenticateStaffRequest(request: NextRequest): StaffTokenPayload | null {
+  const token = getTokenFromRequest(request) || request.cookies.get('staffToken')?.value || null;
+  if (!token) return null;
+  return verifyStaffToken(token);
+}
+
+/**
+ * Authenticate either an owner OR a staff member from the same request.
+ * Returns { type: 'owner', user } or { type: 'staff', staff } or null.
+ */
+export function authenticateAnyRequest(request: NextRequest): 
+  | { type: 'owner'; user: TokenPayload }
+  | { type: 'staff'; staff: StaffTokenPayload }
+  | null {
+  const token = getTokenFromRequest(request) || request.cookies.get('token')?.value || request.cookies.get('staffToken')?.value || null;
+  if (!token) return null;
+
+  // Try owner token first
+  const ownerPayload = verifyToken(token);
+  if (ownerPayload) return { type: 'owner', user: ownerPayload };
+
+  // Try staff token
+  const staffPayload = verifyStaffToken(token);
+  if (staffPayload) return { type: 'staff', staff: staffPayload };
+
+  return null;
 }

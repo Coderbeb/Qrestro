@@ -2,9 +2,13 @@
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { LayoutDashboard, UtensilsCrossed, QrCode, ShoppingBag, Settings, LogOut, Sun, Moon, Lock, Eye, EyeOff, ChevronLeft, ChevronRight, CreditCard, TrendingUp, ChefHat } from 'lucide-react';
+import { LayoutDashboard, UtensilsCrossed, QrCode, ShoppingBag, Settings, LogOut, Sun, Moon, Lock, Eye, EyeOff, ChevronLeft, ChevronRight, CreditCard, TrendingUp, ChefHat, Users } from 'lucide-react';
 import { useSocket } from '@/lib/useSocket';
 import { playNotificationSound } from '@/lib/audio';
+
+// Keep ChevronLeft/ChevronRight referenced so Turbopack includes their module factories
+// (prevents stale-cache errors when HMR updates remove them from the template)
+void ChevronLeft; void ChevronRight;
 
 const NAV_SECTIONS = [
   {
@@ -12,7 +16,6 @@ const NAV_SECTIONS = [
     items: [
       { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} />, id: '' },
       { href: '/dashboard/orders', label: 'Orders', icon: <ShoppingBag size={18} />, id: 'orders' },
-      { href: '/dashboard/kds', label: 'Kitchen KDS', icon: <ChefHat size={18} />, id: 'kds' },
       { href: '/dashboard/billing', label: 'Billing', icon: <CreditCard size={18} />, id: 'billing' },
     ]
   },
@@ -21,6 +24,7 @@ const NAV_SECTIONS = [
     items: [
       { href: '/dashboard/menu', label: 'Menu', icon: <UtensilsCrossed size={18} />, id: 'menu' },
       { href: '/dashboard/tables', label: 'Tables & QR', icon: <QrCode size={18} />, id: 'tables' },
+      { href: '/dashboard/staff', label: 'Staff', icon: <Users size={18} />, id: 'staff' },
     ]
   },
   {
@@ -37,20 +41,9 @@ const ALL_NAV_ITEMS = NAV_SECTIONS.flatMap(section => section.items);
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [owner, setOwner] = useState<{ id?: string; restaurantName?: string; username?: string } | null>(null);
+  const [owner, setOwner] = useState<{ id?: string; restaurantName?: string; username?: string; role?: string } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  
-  useEffect(() => {
-    const stored = localStorage.getItem('sidebarCollapsed');
-    if (stored === 'true') {
-      setSidebarCollapsed(true);
-    }
-  }, []);
 
-  useEffect(() => {
-    localStorage.setItem('sidebarCollapsed', String(sidebarCollapsed));
-  }, [sidebarCollapsed]);
 
   const [isDark, setIsDark] = useState(false);
 
@@ -71,9 +64,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (!token) { router.replace('/auth/login'); return; }
-    const stored = localStorage.getItem('owner');
-    if (stored) setOwner(JSON.parse(stored));
+    const staffToken = localStorage.getItem('staffToken');
+    if (!token && !staffToken) { router.replace('/auth/login'); return; }
+    
+    if (token) {
+      const stored = localStorage.getItem('owner');
+      if (stored) setOwner(JSON.parse(stored));
+    } else if (staffToken) {
+      const storedStaff = localStorage.getItem('staff');
+      const storedRest = localStorage.getItem('staffRestaurant');
+      if (storedStaff && storedRest) {
+        const staff = JSON.parse(storedStaff);
+        const rest = JSON.parse(storedRest);
+        setOwner({
+          id: staff.ownerId,
+          restaurantName: rest.name,
+          username: `${staff.name} (${staff.role})`,
+          role: staff.role,
+        });
+      }
+    }
 
     // Restore theme from localStorage
     const savedTheme = localStorage.getItem('theme');
@@ -113,10 +123,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   function handleLogout() {
+    const isStaff = !!localStorage.getItem('staffToken');
     localStorage.removeItem('token');
     localStorage.removeItem('owner');
+    localStorage.removeItem('staffToken');
+    localStorage.removeItem('staff');
+    localStorage.removeItem('staffRestaurant');
     document.cookie = 'token=; path=/; max-age=0';
-    router.replace('/');
+    document.cookie = 'staffToken=; path=/; max-age=0';
+    router.replace(isStaff ? '/auth/login?tab=staff' : '/');
   }
 
   async function handlePasswordChangeSubmit(e: React.FormEvent) {
@@ -177,21 +192,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       )}
 
       {/* Sidebar */}
-      <aside className={`sidebar ${sidebarOpen ? 'open' : ''} ${sidebarCollapsed ? 'collapsed' : ''}`}>
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-logo">
           <div className="sidebar-logo-icon" style={{ color: '#fff' }}><UtensilsCrossed size={20} /></div>
           <div className="sidebar-logo-text">
             <div className="sidebar-logo-name">{owner?.restaurantName || 'QRestro'}</div>
             <div className="sidebar-logo-sub">@{owner?.username || '...'}</div>
           </div>
-          {/* Collapse button for desktop */}
-          <button 
-            className="sidebar-collapse-btn-desktop" 
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-          </button>
           {/* Close button for mobile */}
           <button
             className="sidebar-close-btn"
@@ -203,12 +210,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         <nav className="sidebar-nav">
-          {NAV_SECTIONS.map((section, sIdx) => (
+          {NAV_SECTIONS.filter(section => {
+            if (!owner?.role || owner.role === 'RESTAURANT_OWNER' || owner.role === 'MANAGER') return true;
+            if (owner.role === 'WAITER' || owner.role === 'CASHIER') return section.title === 'Operations';
+            return false;
+          }).map(section => {
+            const items = (owner?.role === 'WAITER' || owner?.role === 'CASHIER')
+                ? section.items.filter(item => 
+                    item.id === 'orders' || 
+                    item.id === 'tables' || 
+                    item.id === '' || 
+                    (owner.role === 'CASHIER' && item.id === 'billing')
+                  )
+                : section.items;
+              
+            return (
             <div key={section.title} className="sidebar-section">
-              {sIdx > 0 && <div className="sidebar-section-divider" />}
               <div className="sidebar-section-title">{section.title}</div>
               <div className="sidebar-section-items" style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                {section.items.map(item => (
+                {items.map(item => (
                   <Link
                     key={item.id}
                     href={item.href}
@@ -221,7 +241,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 ))}
               </div>
             </div>
-          ))}
+          )})}
         </nav>
 
         <div className="sidebar-footer">

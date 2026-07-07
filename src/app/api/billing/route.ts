@@ -1,22 +1,36 @@
 import prisma from '@/lib/db';
-import { authenticateRequest } from '@/lib/auth';
+import { authenticateAnyRequest } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { emitToRestaurant } from '@/lib/socketServer';
 
+/**
+ * Helper to extract ownerId from either an owner or staff (CASHIER/MANAGER) auth.
+ * Returns ownerId or null if unauthorized.
+ */
+function getOwnerIdFromAuth(request: NextRequest): string | null {
+  const auth = authenticateAnyRequest(request);
+  if (!auth) return null;
+  if (auth.type === 'owner') return auth.user.id;
+  if (auth.type === 'staff' && ['CASHIER', 'MANAGER'].includes(auth.staff.role)) {
+    return auth.staff.ownerId;
+  }
+  return null;
+}
+
 export async function GET(request: NextRequest) {
-  const user = authenticateRequest(request);
-  if (!user) {
+  const ownerId = getOwnerIdFromAuth(request);
+  if (!ownerId) {
     return NextResponse.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
   }
 
   try {
     const [tables, orders] = await Promise.all([
       prisma.table.findMany({
-        where: { ownerId: user.id, isActive: true },
+        where: { ownerId, isActive: true },
         orderBy: { tableNumber: 'asc' },
       }),
       prisma.order.findMany({
-        where: { ownerId: user.id, status: { not: 'cancelled' } },
+        where: { ownerId, status: { not: 'cancelled' } },
         include: {
           items: true,
         },
@@ -84,8 +98,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const user = authenticateRequest(request);
-  if (!user) {
+  const ownerId = getOwnerIdFromAuth(request);
+  if (!ownerId) {
     return NextResponse.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
   }
 
@@ -98,7 +112,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const table = await prisma.table.findFirst({
-      where: { ownerId: user.id, tableNumber: parseInt(tableNumber) },
+      where: { ownerId, tableNumber: parseInt(tableNumber) },
     });
 
     if (!table) {
@@ -108,7 +122,7 @@ export async function PUT(request: NextRequest) {
     // Find all active orders for this table in the current session (after table.updatedAt)
     const activeOrders = await prisma.order.findMany({
       where: {
-        ownerId: user.id,
+        ownerId,
         tableNumber: parseInt(tableNumber),
         createdAt: { gt: table.updatedAt },
         status: { in: ['pending', 'preparing', 'ready'] },
@@ -136,7 +150,7 @@ export async function PUT(request: NextRequest) {
     // This allows the customer page to know the table has been reset
     const allSessionOrders = await prisma.order.findMany({
       where: {
-        ownerId: user.id,
+        ownerId,
         tableNumber: parseInt(tableNumber),
         createdAt: { gt: table.updatedAt }, // Note: since table.updatedAt is now updated, we fetch using the old activeOrders IDs or query all that were just updated
       },
@@ -144,11 +158,11 @@ export async function PUT(request: NextRequest) {
 
     // Notify sockets
     for (const order of activeOrders) {
-      emitToRestaurant(user.id, 'order:updated', { id: order.id, status: 'completed' });
+      emitToRestaurant(ownerId, 'order:updated', { id: order.id, status: 'completed' });
     }
     
     // Emit a specific table reset event so the customer page clears immediately
-    emitToRestaurant(user.id, 'table:reset', { tableNumber: parseInt(tableNumber) });
+    emitToRestaurant(ownerId, 'table:reset', { tableNumber: parseInt(tableNumber) });
 
     return NextResponse.json({ success: true, data: { success: true }, message: 'Table bill settled and session reset successfully.' });
   } catch (error) {

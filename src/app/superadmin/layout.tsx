@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { Globe, Store, Crown, LogOut, Sun, Moon, Lock, Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Globe, Store, Crown, LogOut, Sun, Moon, Lock, Eye, EyeOff } from 'lucide-react';
 
 const NAV_ITEMS = [
   { href: '/superadmin', label: 'Platform Stats', icon: <Globe size={18} />, id: '' },
@@ -12,40 +12,10 @@ const NAV_ITEMS = [
 export default function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [adminName, setAdminName] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('owner');
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          return parsed.username || 'Admin';
-        } catch (e) {
-          return 'Admin';
-        }
-      }
-    }
-    return 'Admin';
-  });
+  const [adminName, setAdminName] = useState('Admin');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  
-  useEffect(() => {
-    const stored = localStorage.getItem('sidebarCollapsed');
-    if (stored === 'true') {
-      setSidebarCollapsed(true);
-    }
-  }, []);
 
-  useEffect(() => {
-    localStorage.setItem('sidebarCollapsed', String(sidebarCollapsed));
-  }, [sidebarCollapsed]);
-
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('theme') === 'dark';
-    }
-    return false;
-  });
+  const [isDark, setIsDark] = useState(false);
 
   // Dropdown & Modal states
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -69,6 +39,13 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     if (stored) {
       const parsed = JSON.parse(stored);
       if (parsed.role !== 'SUPER_ADMIN') { router.replace('/dashboard'); return; }
+      setAdminName(parsed.username || 'Admin');
+    }
+    // Restore theme
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+      setIsDark(true);
+      document.documentElement.setAttribute('data-theme', 'dark');
     }
   }, [router]);
 
@@ -143,21 +120,13 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
       {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
 
       {/* Sidebar */}
-      <aside className={`sidebar ${sidebarOpen ? 'open' : ''} ${sidebarCollapsed ? 'collapsed' : ''}`}>
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-logo">
           <div className="sidebar-logo-icon" style={{ color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Crown size={20} /></div>
           <div className="sidebar-logo-text" style={{ flex: 1, minWidth: 0 }}>
             <div className="sidebar-logo-name">Super Admin</div>
             <div className="sidebar-logo-sub">QRestro SaaS</div>
           </div>
-          {/* Collapse button for desktop */}
-          <button 
-            className="sidebar-collapse-btn-desktop" 
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-          </button>
           <button className="sidebar-close-btn" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar">✕</button>
         </div>
 

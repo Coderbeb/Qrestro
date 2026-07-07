@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { getAuthHeader } from '@/lib/api';
+import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 import { Calendar, DollarSign, ShoppingBag, TrendingUp, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 
 type ReportData = {
@@ -65,12 +66,7 @@ export default function ReportsPage() {
   const maxRevenue = data?.dailySales.reduce((max, d) => Math.max(max, d.revenue), 0) || 1;
 
   if (loading) {
-    return (
-      <div className="loading-center" style={{ minHeight: '60vh' }}>
-        <div className="spinner" style={{ width: 40, height: 40 }} />
-        <span>Generating analytics report…</span>
-      </div>
-    );
+    return <DashboardSkeleton type="table" />;
   }
 
   const metrics = data?.metrics || { totalOrders: 0, totalRevenue: 0, averageTicketSize: 0 };

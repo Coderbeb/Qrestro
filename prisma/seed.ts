@@ -75,6 +75,36 @@ async function seed() {
       console.log(`  ⏭️  Demo Restaurant ${demo.restaurantName} already exists, skipping.`);
     }
   }
+  // 4. Create Demo Staff for "Curry House" restaurant
+  const curryHouse = await prisma.owner.findUnique({ where: { username: 'curryhouse' } });
+  if (curryHouse) {
+    const existingStaff = await prisma.staff.findFirst({ where: { ownerId: curryHouse.id } });
+    if (!existingStaff) {
+      const pinHash = await hashPassword('1234');
+      const demoStaff = [
+        { name: 'Amit Kumar', phone: '+91 9876543001', role: 'WAITER' as const, assignedTables: [1, 2, 3, 4, 5] },
+        { name: 'Priya Singh', phone: '+91 9876543002', role: 'WAITER' as const, assignedTables: [6, 7, 8, 9, 10] },
+        { name: 'Chef Ramesh', phone: '+91 9876543003', role: 'CHEF' as const, assignedTables: [] },
+        { name: 'Meena Patel', phone: '+91 9876543004', role: 'CASHIER' as const, assignedTables: [] },
+        { name: 'Deepak Verma', phone: '+91 9876543005', role: 'MANAGER' as const, assignedTables: [] },
+      ];
+      for (const s of demoStaff) {
+        await prisma.staff.create({
+          data: {
+            ownerId: curryHouse.id,
+            name: s.name,
+            phone: s.phone,
+            pinHash,
+            role: s.role,
+            assignedTables: s.assignedTables,
+          },
+        });
+        console.log(`  ✅ Demo Staff: ${s.name} (${s.role})`);
+      }
+    } else {
+      console.log('  ⏭️  Demo staff already exists, skipping.');
+    }
+  }
 
   console.log('\n🎉 Seed complete!');
 }
