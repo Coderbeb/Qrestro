@@ -1,6 +1,7 @@
 import prisma from '@/lib/db';
 import { authenticateRequest } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { invalidateServerCache } from '@/lib/cache';
 
 // PUT /api/categories/[id] — rename / update sort order
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -24,6 +25,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       include: { _count: { select: { items: true } } },
     });
 
+    // Invalidate caches
+    invalidateServerCache(`categories:${user.id}`, `menu:${user.id}`, `public-menu:${user.id}`);
+
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     console.error('Update category error:', error);
@@ -43,6 +47,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     // Items' categoryId will be set to NULL automatically (onDelete: SetNull in schema)
     await prisma.menuCategory.delete({ where: { id } });
+
+    // Invalidate caches
+    invalidateServerCache(`categories:${user.id}`, `menu:${user.id}`, `public-menu:${user.id}`);
 
     return NextResponse.json({ success: true, data: { message: 'Category deleted. Items moved to Uncategorized.' } });
   } catch (error) {

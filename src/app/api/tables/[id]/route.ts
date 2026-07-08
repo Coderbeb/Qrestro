@@ -2,6 +2,7 @@ import prisma from '@/lib/db';
 import { authenticateRequest } from '@/lib/auth';
 import { buildOrderUrl, generateQRCodeDataURL } from '@/lib/qr';
 import { NextRequest, NextResponse } from 'next/server';
+import { invalidateServerCache } from '@/lib/cache';
 
 export async function GET(
   request: NextRequest,
@@ -54,6 +55,10 @@ export async function PUT(
         qrCodeImageUrl,
       },
     });
+
+    // Invalidate tables cache
+    invalidateServerCache(`tables:${user.id}`);
+
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     console.error('Update table error:', error);
@@ -74,6 +79,10 @@ export async function DELETE(
     if (!existing) return NextResponse.json({ success: false, error: { code: 'NOT_FOUND', message: 'Table not found' } }, { status: 404 });
 
     await prisma.table.delete({ where: { id } });
+
+    // Invalidate tables + stats caches
+    invalidateServerCache(`tables:${user.id}`, `stats:${user.id}`);
+
     return NextResponse.json({ success: true, message: 'Table deleted' });
   } catch (error) {
     console.error('Delete table error:', error);

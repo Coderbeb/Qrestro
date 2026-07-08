@@ -2,57 +2,61 @@ import prisma from '@/lib/db';
 import { authenticateRequest } from '@/lib/auth';
 import { buildOrderUrl, generateQRCodeDataURL } from '@/lib/qr';
 import { NextRequest, NextResponse } from 'next/server';
-
 import { getTableSignature } from '@/lib/security';
+import { getCached, invalidateServerCache } from '@/lib/cache';
 
 export async function GET(request: NextRequest) {
   const user = authenticateRequest(request);
   if (!user) return NextResponse.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
 
   try {
-    const tables = await prisma.table.findMany({
-      where: { ownerId: user.id },
-      orderBy: { tableNumber: 'asc' },
-    });
-
-    // Auto-repair any tables with incorrect JSON formatting, missing QR code images, or missing/invalid signatures
     const requestHost = request.headers.get('host');
-    for (const table of tables) {
-      const isJson = table.qrCodeData && (table.qrCodeData.startsWith('{') || table.qrCodeData.startsWith('['));
-      // Only treat it as invalid localhost if the request is NOT on localhost (e.g. deployed to production)
-      const isLocalhost = table.qrCodeData && table.qrCodeData.includes('localhost') && !requestHost?.includes('localhost');
-      
-      let hasValidSignature = false;
-      if (table.qrCodeData && !isJson && !isLocalhost) {
-        try {
-          const urlObj = new URL(table.qrCodeData);
-          const code = urlObj.searchParams.get('code');
-          if (code === getTableSignature(user.id, table.tableNumber)) {
-            hasValidSignature = true;
+    const cacheKey = `tables:${user.id}`;
+
+    const tables = await getCached(cacheKey, 300, async () => {
+      const dbTables = await prisma.table.findMany({
+        where: { ownerId: user.id },
+        orderBy: { tableNumber: 'asc' },
+      });
+
+      // Auto-repair tables with invalid QR data (only on cache MISS, not every request)
+      for (const table of dbTables) {
+        const isJson = table.qrCodeData && (table.qrCodeData.startsWith('{') || table.qrCodeData.startsWith('['));
+        const isLocalhost = table.qrCodeData && table.qrCodeData.includes('localhost') && !requestHost?.includes('localhost');
+
+        let hasValidSignature = false;
+        if (table.qrCodeData && !isJson && !isLocalhost) {
+          try {
+            const urlObj = new URL(table.qrCodeData);
+            const code = urlObj.searchParams.get('code');
+            if (code === getTableSignature(user.id, table.tableNumber)) {
+              hasValidSignature = true;
+            }
+          } catch {
+            // ignore
           }
-        } catch {
-          // ignore
+        }
+
+        if (!table.qrCodeData || isJson || !table.qrCodeImageUrl || isLocalhost || !hasValidSignature) {
+          const orderUrl = buildOrderUrl(user.id, table.tableNumber, requestHost);
+          const qrCodeImageUrl = await generateQRCodeDataURL(orderUrl);
+
+          await prisma.table.update({
+            where: { id: table.id },
+            data: { qrCodeData: orderUrl, qrCodeImageUrl }
+          });
+
+          table.qrCodeData = orderUrl;
+          table.qrCodeImageUrl = qrCodeImageUrl;
         }
       }
 
-      if (!table.qrCodeData || isJson || !table.qrCodeImageUrl || isLocalhost || !hasValidSignature) {
-        const orderUrl = buildOrderUrl(user.id, table.tableNumber, requestHost);
-        const qrCodeImageUrl = await generateQRCodeDataURL(orderUrl);
+      return dbTables;
+    });
 
-        await prisma.table.update({
-          where: { id: table.id },
-          data: {
-            qrCodeData: orderUrl,
-            qrCodeImageUrl
-          }
-        });
-
-        table.qrCodeData = orderUrl;
-        table.qrCodeImageUrl = qrCodeImageUrl;
-      }
-    }
-
-    return NextResponse.json({ success: true, data: tables });
+    return NextResponse.json({ success: true, data: tables }, {
+      headers: { 'Cache-Control': 'private, max-age=60' },
+    });
   } catch (error) {
     console.error('Get tables error:', error);
     return NextResponse.json({ success: false, error: { code: 'SERVER_ERROR', message: 'Failed to fetch tables' } }, { status: 500 });
@@ -110,6 +114,9 @@ export async function POST(request: NextRequest) {
         isActive: true,
       },
     });
+
+    // Invalidate tables and stats caches
+    invalidateServerCache(`tables:${user.id}`, `stats:${user.id}`);
 
     return NextResponse.json({ success: true, data: table }, { status: 201 });
   } catch (error) {

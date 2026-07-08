@@ -2,6 +2,7 @@ import prisma from '@/lib/db';
 import { authenticateRequest } from '@/lib/auth';
 import { hashPassword } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { getCached, invalidateServerCache } from '@/lib/cache';
 
 export async function GET(request: NextRequest) {
   const user = authenticateRequest(request);
@@ -13,22 +14,26 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const staff = await prisma.staff.findMany({
-      where: { ownerId: user.id },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        role: true,
-        assignedTables: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    const data = await getCached(`staff:${user.id}`, 300, async () => {
+      return prisma.staff.findMany({
+        where: { ownerId: user.id },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          role: true,
+          assignedTables: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
     });
 
-    return NextResponse.json({ success: true, data: staff });
+    return NextResponse.json({ success: true, data }, {
+      headers: { 'Cache-Control': 'private, max-age=60' },
+    });
   } catch (error) {
     console.error('Get staff error:', error);
     return NextResponse.json(
@@ -107,6 +112,9 @@ export async function POST(request: NextRequest) {
         createdAt: true,
       },
     });
+
+    // Invalidate staff cache
+    invalidateServerCache(`staff:${user.id}`);
 
     return NextResponse.json({ success: true, data: staff }, { status: 201 });
   } catch (error) {

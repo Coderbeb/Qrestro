@@ -2,6 +2,7 @@ import prisma from '@/lib/db';
 import { authenticateRequest } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { emitToRestaurant } from '@/lib/socketServer';
+import { invalidateServerCache } from '@/lib/cache';
 
 export async function GET(
   request: NextRequest,
@@ -59,6 +60,9 @@ export async function PUT(
       price: parseFloat(updated.price.toString())
     };
 
+    // Invalidate menu caches
+    invalidateServerCache(`menu:${user.id}`, `public-menu:${user.id}`);
+
     // Broadcast menu item update to all connected customers
     emitToRestaurant(user.id, 'menu:updated', formatted);
 
@@ -82,6 +86,9 @@ export async function DELETE(
     if (!existing) return NextResponse.json({ success: false, error: { code: 'NOT_FOUND', message: 'Menu item not found' } }, { status: 404 });
 
     await prisma.menuItem.delete({ where: { id } });
+
+    // Invalidate menu caches
+    invalidateServerCache(`menu:${user.id}`, `public-menu:${user.id}`, `stats:${user.id}`);
 
     // Broadcast menu item deletion to all connected customers
     emitToRestaurant(user.id, 'menu:deleted', { id });

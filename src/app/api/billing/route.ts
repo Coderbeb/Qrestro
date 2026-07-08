@@ -2,6 +2,7 @@ import prisma from '@/lib/db';
 import { authenticateAnyRequest } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { emitToRestaurant } from '@/lib/socketServer';
+import { getCached, invalidateServerCache } from '@/lib/cache';
 
 /**
  * Helper to extract ownerId from either an owner or staff (CASHIER/MANAGER) auth.
@@ -24,73 +25,86 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const [tables, orders] = await Promise.all([
-      prisma.table.findMany({
-        where: { ownerId, isActive: true },
-        orderBy: { tableNumber: 'asc' },
-      }),
-      prisma.order.findMany({
-        where: { ownerId, status: { not: 'cancelled' } },
-        include: {
-          items: true,
-        },
-        orderBy: { createdAt: 'asc' },
-      }),
-    ]);
+    const result = await getCached(`billing:${ownerId}`, 15, async () => {
+      const [tables, orders] = await Promise.all([
+        prisma.table.findMany({
+          where: { ownerId, isActive: true },
+          orderBy: { tableNumber: 'asc' },
+        }),
+        prisma.order.findMany({
+          where: { ownerId, status: { not: 'cancelled' } },
+          select: {
+            id: true,
+            tableNumber: true,
+            status: true,
+            totalAmount: true,
+            createdAt: true,
+            items: {
+              select: {
+                menuItemName: true,
+                quantity: true,
+                price: true,
+              },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        }),
+      ]);
 
-    const result = tables.map(table => {
-      // Find orders for this table placed after the last table touch/reset time
-      const sessionOrders = orders.filter(
-        order => order.tableNumber === table.tableNumber && order.createdAt > table.updatedAt
-      );
+      return tables.map(table => {
+        const sessionOrders = orders.filter(
+          order => order.tableNumber === table.tableNumber && order.createdAt > table.updatedAt
+        );
 
-      if (sessionOrders.length === 0) {
+        if (sessionOrders.length === 0) {
+          return {
+            tableId: table.id,
+            tableNumber: table.tableNumber,
+            status: 'idle',
+            session: null,
+          };
+        }
+
+        const itemMap = new Map<string, { menuItemName: string; quantity: number; price: number }>();
+        let totalAmount = 0;
+        const allCompleted = sessionOrders.every(o => o.status === 'completed');
+
+        for (const order of sessionOrders) {
+          totalAmount += parseFloat(order.totalAmount.toString());
+          for (const item of order.items) {
+            const key = item.menuItemName;
+            const price = parseFloat(item.price.toString());
+            const existing = itemMap.get(key);
+            if (existing) {
+              existing.quantity += item.quantity;
+            } else {
+              itemMap.set(key, { menuItemName: key, quantity: item.quantity, price });
+            }
+          }
+        }
+
         return {
           tableId: table.id,
           tableNumber: table.tableNumber,
-          status: 'idle',
-          session: null,
+          status: allCompleted ? 'completed_unpaid' : 'active',
+          session: {
+            orders: sessionOrders.map(o => ({
+              id: o.id,
+              status: o.status,
+              totalAmount: parseFloat(o.totalAmount.toString()),
+              createdAt: o.createdAt,
+            })),
+            items: Array.from(itemMap.values()),
+            totalAmount,
+            createdAt: sessionOrders[0].createdAt,
+          },
         };
-      }
-
-      // Collate items across all orders in this session
-      const itemMap = new Map<string, { menuItemName: string; quantity: number; price: number }>();
-      let totalAmount = 0;
-      const allCompleted = sessionOrders.every(o => o.status === 'completed');
-
-      for (const order of sessionOrders) {
-        totalAmount += parseFloat(order.totalAmount.toString());
-        for (const item of order.items) {
-          const key = item.menuItemName;
-          const price = parseFloat(item.price.toString());
-          const existing = itemMap.get(key);
-          if (existing) {
-            existing.quantity += item.quantity;
-          } else {
-            itemMap.set(key, { menuItemName: key, quantity: item.quantity, price });
-          }
-        }
-      }
-
-      return {
-        tableId: table.id,
-        tableNumber: table.tableNumber,
-        status: allCompleted ? 'completed_unpaid' : 'active',
-        session: {
-          orders: sessionOrders.map(o => ({
-            id: o.id,
-            status: o.status,
-            totalAmount: parseFloat(o.totalAmount.toString()),
-            createdAt: o.createdAt,
-          })),
-          items: Array.from(itemMap.values()),
-          totalAmount,
-          createdAt: sessionOrders[0].createdAt,
-        },
-      };
+      });
     });
 
-    return NextResponse.json({ success: true, data: result });
+    return NextResponse.json({ success: true, data: result }, {
+      headers: { 'Cache-Control': 'private, no-cache' },
+    });
   } catch (error) {
     console.error('Billing GET error:', error);
     return NextResponse.json({ success: false, error: { code: 'SERVER_ERROR', message: 'Failed to fetch billing data' } }, { status: 500 });
@@ -161,6 +175,13 @@ export async function PUT(request: NextRequest) {
       emitToRestaurant(ownerId, 'order:updated', { id: order.id, status: 'completed' });
     }
     
+    // Invalidate server caches
+    invalidateServerCache(
+      `billing:${ownerId}`,
+      `stats:${ownerId}`,
+      `orders:${ownerId}`,
+    );
+
     // Emit a specific table reset event so the customer page clears immediately
     emitToRestaurant(ownerId, 'table:reset', { tableNumber: parseInt(tableNumber) });
 

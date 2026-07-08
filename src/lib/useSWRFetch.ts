@@ -47,11 +47,42 @@ export function useSWRFetch<T = unknown>(
 ) {
   return useSWR<T>(key, authFetcher, {
     revalidateOnFocus: false,    // Don't refetch when window regains focus
-    dedupingInterval: 2000,      // Dedupe requests within 2 seconds
+    dedupingInterval: 5000,      // Dedupe requests within 5 seconds (was 2s)
     keepPreviousData: true,      // Show stale data while revalidating
+    revalidateIfStale: true,     // Background revalidate stale data
     ...config,
   });
 }
+
+// ─── Global Socket Connection State ────────────────────────────
+// Updated by useSocket hook; read by useAdaptiveInterval
+
+let _socketConnected = false;
+
+/** Called by useSocket when connection state changes */
+export function setSocketConnected(connected: boolean): void {
+  _socketConnected = connected;
+}
+
+/** Check if socket is currently connected */
+export function isSocketConnected(): boolean {
+  return _socketConnected;
+}
+
+// ─── Adaptive Polling ──────────────────────────────────────────
+
+/**
+ * Returns a refreshInterval value that adapts to socket connection state:
+ * - Socket connected → 0 (no polling, real-time handles it)
+ * - Socket disconnected → fallback interval
+ *
+ * @param fallbackMs - Polling interval when socket is disconnected (default: 5000)
+ */
+export function getAdaptiveInterval(fallbackMs: number = 5000): number {
+  return _socketConnected ? 0 : fallbackMs;
+}
+
+// ─── Cache Mutation Utilities ──────────────────────────────────
 
 /**
  * Globally mutate (invalidate) a specific SWR cache key.
@@ -70,6 +101,31 @@ export function invalidateCaches(...keys: string[]) {
   for (const key of keys) {
     globalMutate(key);
   }
+}
+
+/**
+ * Optimistically update SWR cache without triggering a re-fetch.
+ * The data is updated immediately in the UI, then SWR revalidates
+ * in the background to ensure consistency.
+ *
+ * @param key - The SWR cache key
+ * @param updater - Function that receives current data and returns new data
+ *
+ * @example
+ * ```ts
+ * // When a new order arrives via socket:
+ * optimisticUpdate<Order[]>('/api/orders?limit=100', prev =>
+ *   [newOrder, ...(prev || []).filter(o => o.id !== newOrder.id)]
+ * );
+ * ```
+ */
+export function optimisticUpdate<T>(
+  key: string,
+  updater: (current: T | undefined) => T,
+) {
+  globalMutate(key, (current: T | undefined) => updater(current), {
+    revalidate: true,  // Still revalidate in background for consistency
+  });
 }
 
 /**

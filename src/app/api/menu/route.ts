@@ -1,6 +1,7 @@
 import prisma from '@/lib/db';
 import { authenticateRequest } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { getCached, invalidateServerCache } from '@/lib/cache';
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,23 +21,30 @@ export async function GET(request: NextRequest) {
       where.ownerId = user.id;
     }
 
-    const items = await prisma.menuItem.findMany({
-      where,
-      orderBy: [{ categoryId: 'asc' }, { createdAt: 'desc' }],
-      include: { category: { select: { id: true, name: true, sortOrder: true } } },
+    const resolvedOwnerId = where.ownerId as string;
+    const cacheKey = `menu:${resolvedOwnerId}:${available || 'all'}`;
+
+    const formatted = await getCached(cacheKey, 300, async () => {
+      const items = await prisma.menuItem.findMany({
+        where,
+        orderBy: [{ categoryId: 'asc' }, { createdAt: 'desc' }],
+        include: { category: { select: { id: true, name: true, sortOrder: true } } },
+      });
+
+      return items.map(item => ({
+        id: item.id, ownerId: item.ownerId,
+        categoryId: item.categoryId,
+        category: item.category,
+        name: item.name, description: item.description,
+        price: parseFloat(item.price.toString()), imageUrl: item.imageUrl,
+        preparationTime: item.preparationTime, isAvailable: item.isAvailable,
+        createdAt: item.createdAt, updatedAt: item.updatedAt,
+      }));
     });
 
-    const formatted = items.map(item => ({
-      id: item.id, ownerId: item.ownerId,
-      categoryId: item.categoryId,
-      category: item.category,
-      name: item.name, description: item.description,
-      price: parseFloat(item.price.toString()), imageUrl: item.imageUrl,
-      preparationTime: item.preparationTime, isAvailable: item.isAvailable,
-      createdAt: item.createdAt, updatedAt: item.updatedAt,
-    }));
-
-    return NextResponse.json({ success: true, data: formatted });
+    return NextResponse.json({ success: true, data: formatted }, {
+      headers: { 'Cache-Control': 'private, max-age=60' },
+    });
   } catch (error) {
     console.error('Get menu items error:', error);
     return NextResponse.json({ success: false, error: { code: 'SERVER_ERROR', message: 'Failed to fetch menu items' } }, { status: 500 });
@@ -70,6 +78,9 @@ export async function POST(request: NextRequest) {
       },
       include: { category: { select: { id: true, name: true, sortOrder: true } } },
     });
+
+    // Invalidate menu caches
+    invalidateServerCache(`menu:${user.id}`, `public-menu:${user.id}`, `stats:${user.id}`);
 
     return NextResponse.json({ success: true, data: { ...item, price: parseFloat(item.price.toString()) } }, { status: 201 });
   } catch (error) {

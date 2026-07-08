@@ -1,6 +1,7 @@
 import prisma from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { isRateLimited } from '@/lib/rateLimit';
+import { getCached } from '@/lib/cache';
 
 export async function GET(request: NextRequest) {
   try {
@@ -62,52 +63,59 @@ export async function GET(request: NextRequest) {
 
     const nextSessionToken = generateSessionToken(table.id, table.updatedAt);
 
-    // Fetch categories (sorted)
-    const categories = await prisma.menuCategory.findMany({
-      where: { ownerId },
-      orderBy: { sortOrder: 'asc' },
-      select: { id: true, name: true, sortOrder: true },
+    // Cache the menu data (customer-facing, rarely changes)
+    const menuData = await getCached(`public-menu:${ownerId}`, 120, async () => {
+      // Fetch categories (sorted)
+      const categories = await prisma.menuCategory.findMany({
+        where: { ownerId },
+        orderBy: { sortOrder: 'asc' },
+        select: { id: true, name: true, sortOrder: true },
+      });
+
+      // Fetch all available items with category info
+      const items = await prisma.menuItem.findMany({
+        where: { ownerId, isAvailable: true },
+        orderBy: [{ categoryId: 'asc' }, { createdAt: 'desc' }],
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          price: true,
+          imageUrl: true,
+          preparationTime: true,
+          isAvailable: true,
+          categoryId: true,
+          category: { select: { id: true, name: true, sortOrder: true } },
+        },
+      });
+
+      const formatted = items.map(item => ({
+        ...item,
+        price: parseFloat(item.price.toString()),
+      }));
+
+      // Group items by category
+      const categorized = categories.map(cat => ({
+        ...cat,
+        items: formatted.filter(i => i.categoryId === cat.id),
+      })).filter(cat => cat.items.length > 0);
+
+      const uncategorized = formatted.filter(i => !i.categoryId);
+
+      return { items: formatted, categories: categorized, uncategorized };
     });
-
-    // Fetch all available items with category info
-    const items = await prisma.menuItem.findMany({
-      where: { ownerId, isAvailable: true },
-      orderBy: [{ categoryId: 'asc' }, { createdAt: 'desc' }],
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        price: true,
-        imageUrl: true,
-        preparationTime: true,
-        isAvailable: true,
-        categoryId: true,
-        category: { select: { id: true, name: true, sortOrder: true } },
-      },
-    });
-
-    const formatted = items.map(item => ({
-      ...item,
-      price: parseFloat(item.price.toString()),
-    }));
-
-    // Group items by category
-    const categorized = categories.map(cat => ({
-      ...cat,
-      items: formatted.filter(i => i.categoryId === cat.id),
-    })).filter(cat => cat.items.length > 0);
-
-    const uncategorized = formatted.filter(i => !i.categoryId);
 
     return NextResponse.json({
       success: true,
       data: {
         restaurant: owner,
-        items: formatted,          // flat list (for backward compat)
-        categories: categorized,   // grouped by category
-        uncategorized,             // items without a category
-        sessionToken: nextSessionToken, // verification session token
+        items: menuData.items,
+        categories: menuData.categories,
+        uncategorized: menuData.uncategorized,
+        sessionToken: nextSessionToken,
       },
+    }, {
+      headers: { 'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=600' },
     });
   } catch (error) {
     console.error('Public menu error:', error);

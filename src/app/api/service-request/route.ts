@@ -2,6 +2,7 @@ import prisma from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { isRateLimited } from '@/lib/rateLimit';
 import { emitToRestaurant } from '@/lib/socketServer';
+import { invalidateServerCache } from '@/lib/cache';
 
 type ServiceType = 'waiter' | 'water';
 
@@ -108,6 +109,13 @@ export async function POST(request: NextRequest) {
         totalAmount: parseFloat(order.totalAmount.toString()),
         items: order.items.map(i => ({ ...i, price: parseFloat(i.price.toString()) })),
       };
+
+      // Invalidate caches for the new order
+      invalidateServerCache(
+        `stats:${ownerId}`,
+        `orders:${ownerId}`,
+        `billing:${ownerId}`,
+      );
 
       emitToRestaurant(ownerId, 'order:new', formattedOrder);
 

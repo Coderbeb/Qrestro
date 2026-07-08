@@ -1,6 +1,7 @@
 import prisma from '@/lib/db';
 import { authenticateRequest, hashPassword } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { invalidateServerCache } from '@/lib/cache';
 
 export async function PUT(
   request: NextRequest,
@@ -68,6 +69,9 @@ export async function PUT(
       },
     });
 
+    // Invalidate staff cache
+    invalidateServerCache(`staff:${user.id}`);
+
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     console.error('Update staff error:', error);
@@ -104,6 +108,9 @@ export async function DELETE(
     }
 
     await prisma.staff.delete({ where: { id } });
+
+    // Invalidate staff cache
+    invalidateServerCache(`staff:${user.id}`);
 
     return NextResponse.json({ success: true, message: 'Staff member deleted' });
   } catch (error) {

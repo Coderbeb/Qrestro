@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isRateLimited } from '@/lib/rateLimit';
 import { emitToRestaurant } from '@/lib/socketServer';
 import { getTableSignature } from '@/lib/security';
+import { getCached, invalidateServerCache } from '@/lib/cache';
 
 const VALID_STATUSES = ['pending', 'preparing', 'ready', 'completed', 'cancelled'];
 
@@ -20,31 +21,57 @@ export async function GET(request: NextRequest) {
     const tableNumber = searchParams.get('tableNumber');
     const limit = parseInt(searchParams.get('limit') || '50');
 
-    const where: Record<string, unknown> = { ownerId };
-    if (status) where.status = status;
-    if (tableNumber) where.tableNumber = parseInt(tableNumber);
+    // Build a cache key from the query params
+    const cacheKey = `orders:${ownerId}:${status || 'all'}:${tableNumber || 'all'}:${limit}`;
 
-    const orders = await prisma.order.findMany({
-      where,
-      include: {
-        items: {
-          include: { menuItem: { select: { name: true, imageUrl: true } } },
+    const formatted = await getCached(cacheKey, 5, async () => {
+      const where: Record<string, unknown> = { ownerId };
+      if (status) where.status = status;
+      if (tableNumber) where.tableNumber = parseInt(tableNumber);
+
+      const orders = await prisma.order.findMany({
+        where,
+        select: {
+          id: true,
+          ownerId: true,
+          tableNumber: true,
+          totalAmount: true,
+          estimatedTime: true,
+          status: true,
+          placedBy: true,
+          notes: true,
+          cancellationReason: true,
+          createdAt: true,
+          completedAt: true,
+          updatedAt: true,
+          items: {
+            select: {
+              id: true,
+              menuItemId: true,
+              menuItemName: true,
+              quantity: true,
+              price: true,
+              menuItem: { select: { name: true } },
+            },
+          },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+      });
+
+      return orders.map(order => ({
+        ...order,
+        totalAmount: parseFloat(order.totalAmount.toString()),
+        items: order.items.map(item => ({
+          ...item,
+          price: parseFloat(item.price.toString()),
+        })),
+      }));
     });
 
-    const formatted = orders.map(order => ({
-      ...order,
-      totalAmount: parseFloat(order.totalAmount.toString()),
-      items: order.items.map(item => ({
-        ...item,
-        price: parseFloat(item.price.toString()),
-      })),
-    }));
-
-    return NextResponse.json({ success: true, data: formatted });
+    return NextResponse.json({ success: true, data: formatted }, {
+      headers: { 'Cache-Control': 'private, no-cache' },
+    });
   } catch (error) {
     console.error('Get orders error:', error);
     return NextResponse.json({ success: false, error: { code: 'SERVER_ERROR', message: 'Failed to fetch orders' } }, { status: 500 });
@@ -150,6 +177,13 @@ export async function POST(request: NextRequest) {
       totalAmount: parseFloat(order.totalAmount.toString()),
       items: order.items.map(i => ({ ...i, price: parseFloat(i.price.toString()) })),
     };
+
+    // Invalidate server caches for this owner
+    invalidateServerCache(
+      `stats:${ownerId}`,
+      `orders:${ownerId}`,
+      `billing:${ownerId}`,
+    );
 
     // Notify restaurant owner's dashboard in real-time
     emitToRestaurant(ownerId, 'order:new', formattedOrder);

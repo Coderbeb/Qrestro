@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { setSocketConnected } from '@/lib/useSWRFetch';
 
 /**
  * React hook for connecting to the Socket.io server and listening for
@@ -40,12 +41,14 @@ export function useSocket(
 
     socket.on('connect', () => {
       setConnected(true);
+      setSocketConnected(true);
       console.log(`🔌 [Socket.io] Connected successfully! Room: restaurant:${ownerId}`);
       socket.emit('join-restaurant', ownerId);
     });
 
     socket.on('disconnect', (reason) => {
       setConnected(false);
+      setSocketConnected(false);
       console.log(`🔌 [Socket.io] Disconnected. Reason: ${reason}`);
     });
 
@@ -69,6 +72,7 @@ export function useSocket(
         socketRef.current.disconnect();
         socketRef.current = null;
         setConnected(false);
+        setSocketConnected(false);
       }
     };
   }, [connect]);

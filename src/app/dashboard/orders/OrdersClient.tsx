@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Clock, ChefHat, CheckCircle2, Check, RefreshCw, ShoppingBag, X, CreditCard, Printer, CheckCircle, Bell, Plus, Minus, Search } from 'lucide-react';
 import { getAuthHeader } from '@/lib/api';
 import { useSocket } from '@/lib/useSocket';
-import { useSWRFetch, invalidateCaches } from '@/lib/useSWRFetch';
+import { useSWRFetch, invalidateCaches, getAdaptiveInterval } from '@/lib/useSWRFetch';
 
 type OrderItem = {
   id: string;
@@ -73,9 +73,10 @@ export default function OrdersPage() {
   const [placingManualOrder, setPlacingManualOrder] = useState(false);
   const [manualOrderNotes, setManualOrderNotes] = useState('');
 
-  // SWR: fetch orders and billing with instant cache on re-mount, and poll every 5 seconds for real-time updates
-  const { data: swrOrders, isLoading: ordersLoading } = useSWRFetch<Order[]>('/api/orders?limit=100', { refreshInterval: 3000 });
-  const { data: swrBilling, isLoading: billingLoading } = useSWRFetch<any[]>('/api/billing', { refreshInterval: 3000 });
+  // SWR: fetch orders and billing with instant cache on re-mount, adaptive polling
+  const refreshInterval = getAdaptiveInterval(5000);
+  const { data: swrOrders, isLoading: ordersLoading } = useSWRFetch<Order[]>('/api/orders?limit=100', { refreshInterval });
+  const { data: swrBilling, isLoading: billingLoading } = useSWRFetch<any[]>('/api/billing', { refreshInterval });
   const loading = ordersLoading;
 
   // Seed local state from SWR cache (only when SWR returns fresh data)

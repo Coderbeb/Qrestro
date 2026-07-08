@@ -2,6 +2,7 @@ import prisma from '@/lib/db';
 import { authenticateAnyRequest } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { emitToRestaurant } from '@/lib/socketServer';
+import { invalidateServerCache } from '@/lib/cache';
 
 const VALID_STATUSES = ['pending', 'preparing', 'ready', 'completed', 'cancelled'];
 
@@ -83,6 +84,14 @@ export async function PUT(
       totalAmount: parseFloat(updated.totalAmount.toString()),
       items: updated.items.map(item => ({ ...item, price: parseFloat(item.price.toString()) })),
     };
+
+    // Invalidate server caches
+    invalidateServerCache(
+      `stats:${ownerId}`,
+      `orders:${ownerId}`,
+      `billing:${ownerId}`,
+      `reports:${ownerId}`,
+    );
 
     // Notify restaurant dashboard in real-time
     emitToRestaurant(ownerId, 'order:updated', formattedOrder);

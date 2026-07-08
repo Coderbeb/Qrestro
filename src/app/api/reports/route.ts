@@ -1,6 +1,8 @@
 import prisma from '@/lib/db';
 import { authenticateRequest } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { getCached } from '@/lib/cache';
+import { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   const user = authenticateRequest(request);
@@ -48,91 +50,95 @@ export async function GET(request: NextRequest) {
         }
       }
     }
-    // Query completed orders in range
-    const orders = await prisma.order.findMany({
-      where: {
-        ownerId: user.id,
-        status: 'completed',
-        createdAt: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      include: {
-        items: true,
-      },
-      orderBy: {
-        createdAt: 'asc',
-      },
-    });
 
-    // 1. Basic Stats
-    const totalOrders = orders.length;
-    const totalRevenue = orders.reduce((sum, o) => sum + parseFloat(o.totalAmount.toString()), 0);
-    const averageTicketSize = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    const cacheKey = `reports:${user.id}:${startDate.toISOString()}:${endDate.toISOString()}`;
 
-    // 2. Daily Sales Trend
-    const dailyMap = new Map<string, number>();
-    
-    const getLocalDateString = (date: Date) => {
-      try {
-        return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(date);
-      } catch (e) {
-        const offset = date.getTimezoneOffset() * 60000;
-        const localTime = new Date(date.getTime() - offset);
-        return localTime.toISOString().split('T')[0];
-      }
-    };
+    const data = await getCached(cacheKey, 60, async () => {
+      // ── SQL Aggregation (replaces JS-based processing) ──────────
 
-    // Pre-fill daily map with dates in range to show 0s for missing days
-    const temp = new Date(startDate);
-    // Limit range generation to prevent loops from going crazy if date range is too wide
-    const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays <= 90) {
-      while (temp <= endDate) {
-        const dateStr = getLocalDateString(temp);
-        dailyMap.set(dateStr, 0);
-        temp.setDate(temp.getDate() + 1);
-      }
-    }
+      // 1. Basic metrics: total orders, revenue, avg ticket
+      const metricsResult = await prisma.$queryRaw<
+        { total_orders: bigint; total_revenue: Prisma.Decimal | null }[]
+      >`
+        SELECT
+          COUNT(*)::bigint as total_orders,
+          COALESCE(SUM(total_amount), 0) as total_revenue
+        FROM orders
+        WHERE owner_id = ${user.id}
+          AND status = 'completed'
+          AND created_at >= ${startDate}
+          AND created_at <= ${endDate}
+      `;
 
-    for (const order of orders) {
-      const dateStr = getLocalDateString(order.createdAt);
-      const amount = parseFloat(order.totalAmount.toString());
-      dailyMap.set(dateStr, (dailyMap.get(dateStr) || 0) + amount);
-    }
+      const totalOrders = Number(metricsResult[0]?.total_orders ?? 0);
+      const totalRevenue = Number(metricsResult[0]?.total_revenue ?? 0);
+      const averageTicketSize = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-    const dailySales = Array.from(dailyMap.entries()).map(([date, revenue]) => ({
-      date,
-      revenue,
-    })).sort((a, b) => a.date.localeCompare(b.date));
+      // 2. Daily sales trend (SQL GROUP BY instead of JS Map)
+      const dailyResult = await prisma.$queryRaw<
+        { date: string; revenue: Prisma.Decimal }[]
+      >`
+        SELECT
+          TO_CHAR(created_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD') as date,
+          COALESCE(SUM(total_amount), 0) as revenue
+        FROM orders
+        WHERE owner_id = ${user.id}
+          AND status = 'completed'
+          AND created_at >= ${startDate}
+          AND created_at <= ${endDate}
+        GROUP BY TO_CHAR(created_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD')
+        ORDER BY date
+      `;
 
-    // 3. Top Selling Items
-    const itemMap = new Map<string, { name: string; quantity: number; revenue: number }>();
-    for (const order of orders) {
-      for (const item of order.items) {
-        const key = item.menuItemName;
-        const qty = item.quantity;
-        const rev = parseFloat(item.price.toString()) * qty;
-        const existing = itemMap.get(key);
-        if (existing) {
-          existing.quantity += qty;
-          existing.revenue += rev;
-        } else {
-          itemMap.set(key, { name: key, quantity: qty, revenue: rev });
+      // Pre-fill dates in range to show 0s for missing days
+      const dailyMap = new Map<string, number>();
+      const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays <= 90) {
+        const temp = new Date(startDate);
+        while (temp <= endDate) {
+          const dateStr = temp.toISOString().split('T')[0];
+          dailyMap.set(dateStr, 0);
+          temp.setDate(temp.getDate() + 1);
         }
       }
-    }
 
-    const topItems = Array.from(itemMap.values())
-      .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, 10);
+      // Overlay SQL results onto the pre-filled map
+      for (const row of dailyResult) {
+        dailyMap.set(row.date, Number(row.revenue));
+      }
 
-    return NextResponse.json({
-      success: true,
-      data: {
+      const dailySales = Array.from(dailyMap.entries())
+        .map(([date, revenue]) => ({ date, revenue }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+      // 3. Top selling items (SQL GROUP BY instead of JS Map)
+      const topItemsResult = await prisma.$queryRaw<
+        { name: string; quantity: bigint; revenue: Prisma.Decimal }[]
+      >`
+        SELECT
+          oi.menu_item_name as name,
+          SUM(oi.quantity)::bigint as quantity,
+          COALESCE(SUM(oi.price * oi.quantity), 0) as revenue
+        FROM order_items oi
+        JOIN orders o ON oi.order_id = o.id
+        WHERE o.owner_id = ${user.id}
+          AND o.status = 'completed'
+          AND o.created_at >= ${startDate}
+          AND o.created_at <= ${endDate}
+        GROUP BY oi.menu_item_name
+        ORDER BY quantity DESC
+        LIMIT 10
+      `;
+
+      const topItems = topItemsResult.map(row => ({
+        name: row.name,
+        quantity: Number(row.quantity),
+        revenue: Number(row.revenue),
+      }));
+
+      return {
         metrics: {
           totalOrders,
           totalRevenue,
@@ -140,7 +146,11 @@ export async function GET(request: NextRequest) {
         },
         dailySales,
         topItems,
-      },
+      };
+    });
+
+    return NextResponse.json({ success: true, data }, {
+      headers: { 'Cache-Control': 'private, max-age=30' },
     });
   } catch (error) {
     console.error('Reports GET error:', error);

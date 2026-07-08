@@ -4,7 +4,7 @@ import { getAuthHeader } from '@/lib/api';
 import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 import { useSocket } from '@/lib/useSocket';
 import { ShoppingBag, Printer, CheckCircle, RefreshCw, X, Search } from 'lucide-react';
-import { useSWRFetch, invalidateCache } from '@/lib/useSWRFetch';
+import { useSWRFetch, invalidateCache, getAdaptiveInterval } from '@/lib/useSWRFetch';
 
 type BillingSession = {
   orders: { id: string; status: string; totalAmount: number; createdAt: string }[];
@@ -21,7 +21,8 @@ type TableBilling = {
 };
 
 export default function BillingPage() {
-  const { data: tables = [], isLoading: loading, mutate } = useSWRFetch<TableBilling[]>('/api/billing', { refreshInterval: 3000 });
+  const refreshInterval = getAdaptiveInterval(5000);
+  const { data: tables = [], isLoading: loading, mutate } = useSWRFetch<TableBilling[]>('/api/billing', { refreshInterval });
   const [owner, setOwner] = useState<{ id?: string; restaurantName?: string } | null>(null);
   const [selectedTable, setSelectedTable] = useState<TableBilling | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);

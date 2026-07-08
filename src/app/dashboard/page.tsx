@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ShoppingBag, TrendingUp, Clock, Utensils, QrCode, Package, Inbox, CheckCircle2, ChevronRight } from 'lucide-react';
 import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 import { useSocket } from '@/lib/useSocket';
-import { useSWRFetch, invalidateCaches } from '@/lib/useSWRFetch';
+import { useSWRFetch, invalidateCaches, getAdaptiveInterval } from '@/lib/useSWRFetch';
 
 type Stats = {
   totalOrders: number;
@@ -24,8 +24,9 @@ type RecentOrder = {
 };
 
 export default function DashboardPage() {
-  const { data: stats, isLoading: statsLoading } = useSWRFetch<Stats>('/api/stats', { refreshInterval: 3000 });
-  const { data: recentOrders, isLoading: ordersLoading } = useSWRFetch<RecentOrder[]>('/api/orders?limit=8', { refreshInterval: 3000 });
+  const refreshInterval = getAdaptiveInterval(5000);
+  const { data: stats, isLoading: statsLoading } = useSWRFetch<Stats>('/api/stats', { refreshInterval });
+  const { data: recentOrders, isLoading: ordersLoading } = useSWRFetch<RecentOrder[]>('/api/orders?limit=8', { refreshInterval });
   const loading = statsLoading || ordersLoading;
 
   const [ownerId, setOwnerId] = useState<string | null>(null);
