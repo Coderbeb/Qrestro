@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Clock, ChefHat, CheckCircle2, Check, RefreshCw, ShoppingBag, X, CreditCard, Printer, CheckCircle, Bell, Plus, Minus, Search } from 'lucide-react';
 import { getAuthHeader } from '@/lib/api';
 import { useSocket } from '@/lib/useSocket';
+import { useSWRFetch, invalidateCaches } from '@/lib/useSWRFetch';
 
 type OrderItem = {
   id: string;
@@ -39,7 +40,6 @@ const NEXT_STATUS: Record<string, string | null> = {
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updating, setUpdating] = useState<string | null>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null);
@@ -73,6 +73,20 @@ export default function OrdersPage() {
   const [placingManualOrder, setPlacingManualOrder] = useState(false);
   const [manualOrderNotes, setManualOrderNotes] = useState('');
 
+  // SWR: fetch orders and billing with instant cache on re-mount
+  const { data: swrOrders, isLoading: ordersLoading } = useSWRFetch<Order[]>('/api/orders?limit=100');
+  const { data: swrBilling, isLoading: billingLoading } = useSWRFetch<any[]>('/api/billing');
+  const loading = ordersLoading;
+
+  // Seed local state from SWR cache (only when SWR returns fresh data)
+  useEffect(() => {
+    if (swrOrders) setOrders(swrOrders);
+  }, [swrOrders]);
+
+  useEffect(() => {
+    if (swrBilling) setBillingTables(swrBilling);
+  }, [swrBilling]);
+
   // Get owner ID and profile details from localStorage
   useEffect(() => {
     const stored = localStorage.getItem('owner');
@@ -85,45 +99,17 @@ export default function OrdersPage() {
     }
   }, []);
 
-  const loadBilling = useCallback(async () => {
-    try {
-      const res = await fetch('/api/billing', { headers: getAuthHeader() });
-      const data = await res.json();
-      if (data.success) {
-        setBillingTables(data.data || []);
-      }
-    } catch (error) {
-      console.error('Error loading billing data:', error);
-    }
-  }, []);
-
-  const loadOrders = useCallback(async () => {
-    const startTime = Date.now();
-    try {
-      const res = await fetch('/api/orders?limit=100', { headers: getAuthHeader() });
-      const data = await res.json();
-      if (data.success) setOrders(data.data);
-    } finally {
-      const elapsed = Date.now() - startTime;
-      const delay = Math.max(0, 600 - elapsed);
-      setTimeout(() => {
-        setLoading(false);
-        setRefreshing(false);
-      }, delay);
-    }
-  }, []);
-
-  // Socket.io event handlers
+  // Socket.io event handlers — optimistic local updates + SWR cache invalidation
   const socketListeners = useMemo(() => ({
     'order:new': (data: unknown) => {
       const newOrder = data as Order;
       setOrders(prev => [newOrder, ...prev.filter(o => o.id !== newOrder.id)]);
-      loadBilling();
+      invalidateCaches('/api/orders?limit=100', '/api/billing');
     },
     'order:updated': (data: unknown) => {
       const updated = data as Order;
       setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
-      loadBilling();
+      invalidateCaches('/api/orders?limit=100', '/api/billing');
     },
     'service:request': (data: unknown) => {
       const alert = data as { tableNumber: number; type: string; timestamp: string };
@@ -141,21 +127,18 @@ export default function OrdersPage() {
         audio.play().catch(() => {});
       } catch {}
     },
-  }), [loadBilling]);
+  }), []);
 
   useSocket(ownerId, socketListeners);
 
-  // Initial fetch and setup intervals
+  // Time tick interval
   useEffect(() => {
-    loadOrders();
-    loadBilling();
-
     const interval = setInterval(() => {
       setTimeTick(t => t + 1);
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [loadOrders, loadBilling]);
+  }, []);
 
   async function advanceStatus(order: Order) {
     const next = NEXT_STATUS[order.status];
@@ -170,7 +153,7 @@ export default function OrdersPage() {
       const data = await res.json();
       if (data.success) {
         setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: next } : o));
-        loadBilling();
+        invalidateCaches('/api/orders?limit=100', '/api/billing');
       }
     } finally { setUpdating(null); }
   }
@@ -256,8 +239,7 @@ export default function OrdersPage() {
       const data = await res.json();
       if (data.success) {
         setShowManualOrderModal(false);
-        loadOrders();
-        loadBilling();
+        invalidateCaches('/api/orders?limit=100', '/api/billing');
       } else {
         alert(data.error?.message || 'Failed to place manual order');
       }
@@ -281,7 +263,7 @@ export default function OrdersPage() {
       const data = await res.json();
       if (data.success) {
         setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'cancelled', cancellationReason: cancelReason.trim() } : o));
-        loadBilling();
+        invalidateCaches('/api/orders?limit=100', '/api/billing');
         setCancelModalOrder(null);
         setCancelReason('');
       } else {
@@ -307,8 +289,7 @@ export default function OrdersPage() {
       });
       const data = await res.json();
       if (data.success) {
-        loadBilling();
-        loadOrders();
+        invalidateCaches('/api/orders?limit=100', '/api/billing');
         setBillingDrawerTable(null);
       } else {
         alert(data.error?.message || 'Failed to settle bill');
@@ -724,7 +705,7 @@ export default function OrdersPage() {
           <button 
             id="refresh-orders-btn" 
             className="btn btn-ghost btn-sm" 
-            onClick={() => { setRefreshing(true); loadOrders(); loadBilling(); }} 
+            onClick={() => { setRefreshing(true); invalidateCaches('/api/orders?limit=100', '/api/billing'); setTimeout(() => setRefreshing(false), 1000); }} 
             disabled={refreshing}
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
           >

@@ -1,9 +1,10 @@
 'use client';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { getAuthHeader } from '@/lib/api';
 import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 import { useSocket } from '@/lib/useSocket';
 import { ShoppingBag, Printer, CheckCircle, RefreshCw, X, Search } from 'lucide-react';
+import { useSWRFetch, invalidateCache } from '@/lib/useSWRFetch';
 
 type BillingSession = {
   orders: { id: string; status: string; totalAmount: number; createdAt: string }[];
@@ -20,8 +21,7 @@ type TableBilling = {
 };
 
 export default function BillingPage() {
-  const [tables, setTables] = useState<TableBilling[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: tables = [], isLoading: loading, mutate } = useSWRFetch<TableBilling[]>('/api/billing');
   const [owner, setOwner] = useState<{ id?: string; restaurantName?: string } | null>(null);
   const [selectedTable, setSelectedTable] = useState<TableBilling | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
@@ -30,21 +30,21 @@ export default function BillingPage() {
   const [searchQuery, setSearchQuery] = useState('');
 
   // Pre-calculate counts for each filter category
-  const activeTablesCount = useMemo(() => tables.filter(t => t.status !== 'idle').length, [tables]);
-  const unpaidTablesCount = useMemo(() => tables.filter(t => t.status === 'completed_unpaid').length, [tables]);
-  const idleTablesCount = useMemo(() => tables.filter(t => t.status === 'idle').length, [tables]);
-  const allTablesCount = tables.length;
+  const activeTablesCount = useMemo(() => (tables ?? []).filter(t => t.status !== 'idle').length, [tables]);
+  const unpaidTablesCount = useMemo(() => (tables ?? []).filter(t => t.status === 'completed_unpaid').length, [tables]);
+  const idleTablesCount = useMemo(() => (tables ?? []).filter(t => t.status === 'idle').length, [tables]);
+  const allTablesCount = (tables ?? []).length;
 
   const filteredTables = useMemo(() => {
-    let result = tables;
+    let result = tables ?? [];
     
     // Apply status filter
     if (filter === 'active') {
-      result = tables.filter(t => t.status !== 'idle');
+      result = result.filter(t => t.status !== 'idle');
     } else if (filter === 'unpaid') {
-      result = tables.filter(t => t.status === 'completed_unpaid');
+      result = result.filter(t => t.status === 'completed_unpaid');
     } else if (filter === 'idle') {
-      result = tables.filter(t => t.status === 'idle');
+      result = result.filter(t => t.status === 'idle');
     }
 
     // Apply search query filter (by table number)
@@ -67,37 +67,17 @@ export default function BillingPage() {
     }
   }, []);
 
-  const loadBilling = useCallback(async () => {
-    try {
-      const headers = getAuthHeader();
-      const res = await fetch('/api/billing', { headers });
-      const data = await res.json();
-      if (data.success) {
-        setTables(data.data || []);
-      }
-    } catch (error) {
-      console.error('Error loading billing data:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  // Sync with sockets in real-time
+  // Sync with sockets in real-time — invalidate SWR cache
   const socketListeners = useMemo(() => ({
     'order:new': () => {
-      loadBilling();
+      invalidateCache('/api/billing');
     },
     'order:updated': () => {
-      loadBilling();
+      invalidateCache('/api/billing');
     },
-  }), [loadBilling]);
+  }), []);
 
   useSocket(owner?.id || null, socketListeners);
-
-  useEffect(() => {
-    loadBilling();
-  }, [loadBilling]);
 
   async function handleReset(tableNumber: number) {
     if (!confirm(`Are you sure you want to mark Table ${tableNumber} as Paid and reset it for the next customer?`)) {
@@ -115,8 +95,8 @@ export default function BillingPage() {
       });
       const data = await res.json();
       if (data.success) {
-        // Refresh billing table
-        loadBilling();
+        // Refresh billing table via SWR
+        mutate();
         // Hide receipt modal if it was open
         setShowReceiptModal(false);
         setSelectedTable(null);
@@ -135,7 +115,7 @@ export default function BillingPage() {
 
   const handleRefreshClick = () => {
     setRefreshing(true);
-    loadBilling();
+    mutate().then(() => setRefreshing(false));
   };
 
   if (loading) {

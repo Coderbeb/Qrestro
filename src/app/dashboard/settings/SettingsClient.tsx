@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Store, Lock } from 'lucide-react';
 import { getAuthHeader } from '@/lib/api';
 import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton';
+import { useSWRFetch } from '@/lib/useSWRFetch';
 
 type Owner = {
   id: string;
@@ -30,22 +31,22 @@ export default function SettingsPage() {
     setTimeout(() => setToast(''), 3500);
   };
 
+  // SWR: fetch profile with instant cache on re-mount
+  const { data: swrOwner, isLoading: loading } = useSWRFetch<Owner>('/api/auth/profile');
+
+  // Seed local state from SWR cache
   useEffect(() => {
-    fetch('/api/auth/profile', { headers: getAuthHeader() })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          setOwner(data.data);
-          setProfile({
-            restaurantName: data.data.restaurantName || '',
-            ownerName: data.data.ownerName || '',
-            email: data.data.email,
-            phone: data.data.phone || '',
-            cuisine: data.data.cuisine || '',
-          });
-        }
+    if (swrOwner) {
+      setOwner(swrOwner);
+      setProfile({
+        restaurantName: swrOwner.restaurantName || '',
+        ownerName: swrOwner.ownerName || '',
+        email: swrOwner.email,
+        phone: swrOwner.phone || '',
+        cuisine: swrOwner.cuisine || '',
       });
-  }, []);
+    }
+  }, [swrOwner]);
 
   async function handleProfileSave(e: React.FormEvent) {
     e.preventDefault();

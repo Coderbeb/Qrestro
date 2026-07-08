@@ -1,9 +1,10 @@
 'use client';
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { Plus, MoreVertical, Eye, Download, ExternalLink, Copy, RefreshCw, Pause, Play, Trash2, Utensils, QrCode, X, Sparkles } from 'lucide-react';
 import { getAuthHeader } from '@/lib/api';
 import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 import { useSocket } from '@/lib/useSocket';
+import { useSWRFetch } from '@/lib/useSWRFetch';
 
 type Table = { id: string; tableNumber: number; qrCodeImageUrl: string | null; qrCodeData: string; isActive: boolean; };
 type Order = { id: string; tableNumber: number; status: string; };
@@ -78,9 +79,6 @@ async function downloadBrandedQR(qrUrl: string, tableNumber: number, restaurantN
 }
 
 export default function TablesPage() {
-  const [tables, setTables] = useState<Table[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [newTableNum, setNewTableNum] = useState('');
   const [adding, setAdding] = useState(false);
@@ -94,6 +92,11 @@ export default function TablesPage() {
   const [ownerId, setOwnerId] = useState<string | null>(null);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
+
+  // SWR: fetch tables and orders with instant cache on re-mount
+  const { data: tables = [], isLoading: tablesLoading, mutate: mutateTables } = useSWRFetch<Table[]>('/api/tables');
+  const { data: orders = [], isLoading: ordersLoading, mutate: mutateOrders } = useSWRFetch<Order[]>('/api/orders?limit=100');
+  const loading = tablesLoading || ordersLoading;
 
   useEffect(() => {
     const stored = localStorage.getItem('owner');
@@ -110,37 +113,18 @@ export default function TablesPage() {
     return () => document.removeEventListener('click', handleClick);
   }, []);
 
-  const loadData = useCallback(async () => {
-    try {
-      const headers = getAuthHeader();
-      const [tablesRes, ordersRes] = await Promise.all([fetch('/api/tables', { headers }), fetch('/api/orders?limit=100', { headers })]);
-      const [tablesData, ordersData] = await Promise.all([tablesRes.json(), ordersRes.json()]);
-      if (tablesData.success) setTables(tablesData.data);
-      if (ordersData.success) setOrders(ordersData.data);
-    } finally { setLoading(false); }
-  }, []);
-
-  // Refresh only the orders list (tables don't change via Socket.io)
-  const refreshOrders = useCallback(async () => {
-    try {
-      const res = await fetch('/api/orders?limit=100', { headers: getAuthHeader() });
-      const data = await res.json();
-      if (data.success) setOrders(data.data);
-    } catch { /* ignore */ }
-  }, []);
+  // Refresh helper that invalidates SWR cache
+  const loadData = () => { mutateTables(); mutateOrders(); };
 
   // Socket.io: re-fetch orders when any order event arrives
   const socketListeners = useMemo(() => ({
     'order:new': () => {
-      refreshOrders();
+      mutateOrders();
     },
-    'order:updated': () => refreshOrders(),
-  }), [refreshOrders]);
+    'order:updated': () => mutateOrders(),
+  }), [mutateOrders]);
 
   useSocket(ownerId, socketListeners);
-
-  // Initial fetch only — no polling
-  useEffect(() => { loadData(); }, [loadData]);
 
   async function handleAdd() {
     if (!newTableNum || parseInt(newTableNum) < 1) { showToast('Enter a valid table number'); return; }

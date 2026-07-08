@@ -1,9 +1,8 @@
 'use client';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { RefreshCw, ShoppingBag } from 'lucide-react';
 import { getAuthHeader } from '@/lib/api';
 import { useSocket } from '@/lib/useSocket';
-import { useSWRFetch, invalidateCache } from '@/lib/useSWRFetch';
 
 type OrderItem = {
   id: string;
@@ -23,23 +22,12 @@ type Order = {
 
 export default function KDSPage() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [ownerId, setOwnerId] = useState<string | null>(null);
   
   // Time tick to force re-render age alerts every 30 seconds
   const [timeTick, setTimeTick] = useState(0);
-
-  // SWR: fetch all orders with instant cache on re-mount
-  const { data: swrOrders, isLoading: loading } = useSWRFetch<Order[]>('/api/orders?limit=100');
-
-  // Seed local state with KDS-filtered orders from SWR
-  useEffect(() => {
-    if (swrOrders) {
-      const activeKds = swrOrders.filter((o: Order) => o.status === 'preparing');
-      activeKds.sort((a: Order, b: Order) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      setOrders(activeKds);
-    }
-  }, [swrOrders]);
 
   // Set ownerId from localStorage on mount
   useEffect(() => {
@@ -49,7 +37,31 @@ export default function KDSPage() {
     }
   }, []);
 
-  // Socket.io event handlers — optimistic local updates
+  const loadKDSOrders = useCallback(async () => {
+    const startTime = Date.now();
+    try {
+      const res = await fetch('/api/orders?limit=100', { headers: getAuthHeader() });
+      const data = await res.json();
+      if (data.success) {
+        // KDS only shows preparing orders (chef view)
+        const activeKds = (data.data || []).filter(
+          (o: Order) => o.status === 'preparing'
+        );
+        // Sort oldest first (FIFO - First In, First Out)
+        activeKds.sort((a: Order, b: Order) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        setOrders(activeKds);
+      }
+    } finally {
+      const elapsed = Date.now() - startTime;
+      const delay = Math.max(0, 600 - elapsed);
+      setTimeout(() => {
+        setLoading(false);
+        setRefreshing(false);
+      }, delay);
+    }
+  }, []);
+
+  // Socket.io event handlers
   const socketListeners = useMemo(() => ({
     'order:new': (data: unknown) => {
       const newOrder = data as Order;
@@ -61,7 +73,6 @@ export default function KDSPage() {
           return next.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         });
       }
-      invalidateCache('/api/orders?limit=100');
     },
     'order:updated': (data: unknown) => {
       const updated = data as Order;
@@ -75,20 +86,21 @@ export default function KDSPage() {
         // If status changed from preparing to ready/completed/cancelled, remove it from the KDS board
         setOrders(prev => prev.filter(o => o.id !== updated.id));
       }
-      invalidateCache('/api/orders?limit=100');
     },
   }), []);
 
   useSocket(ownerId, socketListeners);
 
-  // Time tick interval
+  // Initial fetch and timer setups
   useEffect(() => {
+    loadKDSOrders();
+
     const interval = setInterval(() => {
       setTimeTick(t => t + 1);
     }, 30000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [loadKDSOrders]);
 
   function timeSinceMins(dateStr: string) {
     const ms = Date.now() - new Date(dateStr).getTime();
@@ -225,7 +237,7 @@ export default function KDSPage() {
         </div>
         <button 
           className="btn btn-ghost btn-sm" 
-          onClick={() => { setRefreshing(true); invalidateCache('/api/orders?limit=100'); setTimeout(() => setRefreshing(false), 1000); }} 
+          onClick={() => { setRefreshing(true); loadKDSOrders(); }} 
           disabled={refreshing}
           style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', height: '38px', background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
         >

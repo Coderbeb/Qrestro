@@ -1,8 +1,9 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Users, Edit3, Trash2, X, Shield, ChefHat, CreditCard, UserCheck, Eye, EyeOff, Copy, RefreshCw } from 'lucide-react';
 import { getAuthHeader } from '@/lib/api';
 import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton';
+import { useSWRFetch } from '@/lib/useSWRFetch';
 
 type StaffMember = {
   id: string;
@@ -33,7 +34,6 @@ function generatePin(): string {
 export default function StaffPage() {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [tables, setTables] = useState<TableInfo[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [toast, setToast] = useState('');
@@ -57,20 +57,17 @@ export default function StaffPage() {
     setTimeout(() => setToast(''), 3500);
   };
 
-  const loadData = useCallback(async () => {
-    try {
-      const headers = getAuthHeader();
-      const [staffRes, tablesRes] = await Promise.all([
-        fetch('/api/staff', { headers }),
-        fetch('/api/tables', { headers }),
-      ]);
-      const [staffData, tablesData] = await Promise.all([staffRes.json(), tablesRes.json()]);
-      if (staffData.success) setStaff(staffData.data);
-      if (tablesData.success) setTables(tablesData.data);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // SWR: fetch staff and tables with instant cache on re-mount
+  const { data: swrStaff, isLoading: staffLoading, mutate: mutateStaff } = useSWRFetch<StaffMember[]>('/api/staff');
+  const { data: swrTables, isLoading: tablesLoading, mutate: mutateTables } = useSWRFetch<TableInfo[]>('/api/tables');
+  const loading = staffLoading || tablesLoading;
+
+  // Seed local state from SWR cache
+  useEffect(() => { if (swrStaff) setStaff(swrStaff); }, [swrStaff]);
+  useEffect(() => { if (swrTables) setTables(swrTables); }, [swrTables]);
+
+  // Refresh helper that invalidates SWR cache
+  const loadData = () => { mutateStaff(); mutateTables(); };
 
   useEffect(() => {
     loadData();

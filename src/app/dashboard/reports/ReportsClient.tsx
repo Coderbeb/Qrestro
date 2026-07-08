@@ -1,8 +1,8 @@
 'use client';
-import { useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { getAuthHeader } from '@/lib/api';
 import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 import { Calendar, DollarSign, ShoppingBag, TrendingUp, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useSWRFetch } from '@/lib/useSWRFetch';
 
 type ReportData = {
   metrics: {
@@ -14,33 +14,52 @@ type ReportData = {
   topItems: { name: string; quantity: number; revenue: number }[];
 };
 
-// Build API URL based on preset
-function getReportUrl(preset: 'today' | '7days' | '30days'): string {
-  const end = new Date();
-  const start = new Date();
-  if (preset === 'today') {
-    start.setHours(0, 0, 0, 0);
-  } else if (preset === '7days') {
-    start.setDate(start.getDate() - 7);
-    start.setHours(0, 0, 0, 0);
-  } else {
-    start.setDate(start.getDate() - 30);
-    start.setHours(0, 0, 0, 0);
-  }
-  return `/api/reports?startDate=${start.toISOString()}&endDate=${end.toISOString()}`;
-}
-
 export default function ReportsPage() {
   const chartScrollRef = useRef<HTMLDivElement>(null);
+  const [data, setData] = useState<ReportData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [rangePreset, setRangePreset] = useState<'today' | '7days' | '30days'>('today');
 
-  // SWR: fetch reports keyed by preset — switching presets shows cached data instantly
-  const reportUrl = useMemo(() => getReportUrl(rangePreset), [rangePreset]);
-  const { data, isLoading: loading, mutate } = useSWRFetch<ReportData>(reportUrl);
-  const [refreshing, setRefreshing] = useState(false);
+  const loadReports = useCallback(async (preset: 'today' | '7days' | '30days') => {
+    try {
+      const headers = getAuthHeader();
+      const end = new Date();
+      const start = new Date();
+      
+      if (preset === 'today') {
+        start.setHours(0, 0, 0, 0);
+      } else if (preset === '7days') {
+        start.setDate(start.getDate() - 7);
+        start.setHours(0, 0, 0, 0);
+      } else {
+        start.setDate(start.getDate() - 30);
+        start.setHours(0, 0, 0, 0);
+      }
+
+      const startStr = start.toISOString();
+      const endStr = end.toISOString();
+
+      const res = await fetch(`/api/reports?startDate=${startStr}&endDate=${endStr}`, { headers });
+      const resData = await res.json();
+      if (resData.success) {
+        setData(resData.data);
+      }
+    } catch (error) {
+      console.error('Error loading reports:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadReports(rangePreset);
+  }, [rangePreset, loadReports]);
 
   const handlePresetChange = (preset: 'today' | '7days' | '30days') => {
     setRangePreset(preset);
+    setRefreshing(true);
   };
 
   // Find max daily sales for bar chart height scaling

@@ -1,10 +1,10 @@
 'use client';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { ShoppingBag, TrendingUp, Clock, Utensils, QrCode, Package, Inbox, CheckCircle2, ChevronRight } from 'lucide-react';
-import { getAuthHeader } from '@/lib/api';
 import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 import { useSocket } from '@/lib/useSocket';
+import { useSWRFetch, invalidateCaches } from '@/lib/useSWRFetch';
 
 type Stats = {
   totalOrders: number;
@@ -24,9 +24,10 @@ type RecentOrder = {
 };
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: stats, isLoading: statsLoading } = useSWRFetch<Stats>('/api/stats');
+  const { data: recentOrders, isLoading: ordersLoading } = useSWRFetch<RecentOrder[]>('/api/orders?limit=8');
+  const loading = statsLoading || ordersLoading;
+
   const [ownerId, setOwnerId] = useState<string | null>(null);
 
   // Get owner ID from localStorage for Socket.io room
@@ -37,41 +38,17 @@ export default function DashboardPage() {
     }
   }, []);
 
-  const load = useCallback(async () => {
-    try {
-      const headers = getAuthHeader();
-      const [statsRes, ordersRes] = await Promise.all([
-        fetch('/api/stats', { headers }),
-        fetch('/api/orders?limit=8', { headers }),
-      ]);
-      const [statsData, ordersData] = await Promise.all([
-        statsRes.json(), ordersRes.json(),
-      ]);
-
-      if (statsData.success) {
-        setStats(statsData.data);
-      }
-      if (ordersData.success) {
-        setRecentOrders(ordersData.data);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Socket.io event handlers
+  // Socket.io event handlers — invalidate SWR cache for real-time updates
   const socketListeners = useMemo(() => ({
     'order:new': () => {
-      load();
+      invalidateCaches('/api/stats', '/api/orders?limit=8');
     },
     'order:updated': () => {
-      load();
+      invalidateCaches('/api/stats', '/api/orders?limit=8');
     },
-  }), [load]);
+  }), []);
 
   useSocket(ownerId, socketListeners);
-
-  useEffect(() => { load(); }, [load]);
 
   const statCards = stats ? [
     { icon: <ShoppingBag size={20} />, label: "Today's Orders", value: stats.todayOrders, bg: 'rgba(3, 77, 55, 0.08)', color: 'var(--accent)' },
@@ -126,7 +103,7 @@ export default function DashboardPage() {
               <h3>Recent Orders</h3>
               <Link href="/dashboard/orders" className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>View all <ChevronRight size={14} /></Link>
             </div>
-            {recentOrders.length === 0 ? (
+            {(recentOrders ?? []).length === 0 ? (
               <div className="empty-state">
                 <div className="empty-state-icon"><Inbox size={40} /></div>
                 <h3>No orders yet</h3>
@@ -145,7 +122,7 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {recentOrders.map(order => (
+                    {(recentOrders ?? []).map(order => (
                       <tr key={order.id}>
                         <td><strong>Table {order.tableNumber}</strong></td>
                         <td style={{ color: 'var(--text-secondary)', maxWidth: 220 }}>

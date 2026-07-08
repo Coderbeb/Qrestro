@@ -1,7 +1,8 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { Folder, Utensils, Trash2, Clock, Plus, ArrowLeft, Edit, Layers } from 'lucide-react';
 import { getAuthHeader } from '@/lib/api';
+import { useSWRFetch } from '@/lib/useSWRFetch';
 
 type Category = {
   id: string;
@@ -37,7 +38,6 @@ export default function MenuPage() {
   const [tab, setTab] = useState<'items' | 'categories'>('items');
   const [items, setItems] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filterCat, setFilterCat] = useState<string>('all');
 
   // Item modal state
@@ -58,19 +58,17 @@ export default function MenuPage() {
   const [toast, setToast] = useState('');
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
-  const loadAll = useCallback(async () => {
-    try {
-      const [itemsRes, catsRes] = await Promise.all([
-        fetch('/api/menu', { headers: getAuthHeader() }),
-        fetch('/api/categories', { headers: getAuthHeader() }),
-      ]);
-      const [itemsData, catsData] = await Promise.all([itemsRes.json(), catsRes.json()]);
-      if (itemsData.success) setItems(itemsData.data);
-      if (catsData.success) setCategories(catsData.data);
-    } finally { setLoading(false); }
-  }, []);
+  // SWR: fetch items and categories with instant cache on re-mount
+  const { data: swrItems, isLoading: itemsLoading, mutate: mutateItems } = useSWRFetch<MenuItem[]>('/api/menu');
+  const { data: swrCats, isLoading: catsLoading, mutate: mutateCats } = useSWRFetch<Category[]>('/api/categories');
+  const loading = itemsLoading || catsLoading;
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  // Seed local state from SWR cache
+  useEffect(() => { if (swrItems) setItems(swrItems); }, [swrItems]);
+  useEffect(() => { if (swrCats) setCategories(swrCats); }, [swrCats]);
+
+  // Refresh helper that invalidates SWR cache
+  const loadAll = () => { mutateItems(); mutateCats(); };
 
   // ── Item handlers ─────────────────────────────────────────────
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
