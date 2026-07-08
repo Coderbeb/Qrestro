@@ -165,7 +165,6 @@ export default function TablesPage() {
                 {activeDropdown === table.id && (
                   <div className="table-dropdown-menu">
                     <button className="dropdown-item" onClick={() => { setViewQR(table); setActiveDropdown(null); }}><Eye size={14} /> View QR Code</button>
-                    <button className="dropdown-item" onClick={() => { handleBrandedDownload(table); setActiveDropdown(null); }} disabled={brandDownloading === table.id}><Download size={14} /> {brandDownloading === table.id ? 'Preparing...' : 'Download / Print QR'}</button>
                     <button className="dropdown-item" onClick={() => { copyLink(table); setActiveDropdown(null); }}><Copy size={14} /> Copy Link</button>
                     <div style={{ height: 1, background: 'var(--border)', margin: '0.25rem 0' }} />
                     <button className="dropdown-item" onClick={() => { toggleActive(table); setActiveDropdown(null); }}>{table.isActive ? <><Pause size={14} /> Deactivate</> : <><Play size={14} /> Activate</>}</button>
