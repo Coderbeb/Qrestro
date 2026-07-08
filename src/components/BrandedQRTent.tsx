@@ -336,11 +336,21 @@ export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, ta
         /* ----- Print specific styles ----- */
         @media print {
           @page {
+             size: portrait;
              margin: 0;
+          }
+          html, body {
+            height: 100%;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
           }
           body {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
           }
           body * {
             visibility: hidden;
@@ -349,13 +359,15 @@ export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, ta
             visibility: visible;
           }
           .printable-area {
-            position: absolute !important;
-            left: 50% !important;
-            top: 50% !important;
-            transform: translate(-50%, -50%) !important;
-            margin: 0 !important;
-            padding: 0 !important;
+            position: relative !important;
+            left: auto !important;
+            top: auto !important;
+            transform: none !important;
+            margin: 0 auto !important;
             box-shadow: none !important;
+            page-break-after: avoid !important;
+            page-break-before: avoid !important;
+            page-break-inside: avoid !important;
           }
           /* Hide scrollbars during print */
           ::-webkit-scrollbar { display: none; }
