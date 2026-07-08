@@ -1,12 +1,12 @@
 'use client';
 
-import useSWR, { SWRConfiguration, mutate as globalMutate } from 'swr';
+import useSWR, { SWRConfiguration, mutate as globalMutate, preload } from 'swr';
 
 /**
  * Authenticated fetcher for SWR.
  * Reads the JWT token from localStorage and attaches it as a Bearer token.
  */
-async function authFetcher<T>(url: string): Promise<T> {
+export async function authFetcher<T>(url: string): Promise<T> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
   const staffToken = typeof window !== 'undefined' ? localStorage.getItem('staffToken') : '';
   const authToken = token || staffToken || '';
@@ -69,5 +69,32 @@ export function invalidateCache(key: string) {
 export function invalidateCaches(...keys: string[]) {
   for (const key of keys) {
     globalMutate(key);
+  }
+}
+
+/**
+ * ALL dashboard API endpoints that should be prefetched.
+ * Called once in the layout to warm the SWR cache for every tab.
+ */
+const DASHBOARD_ENDPOINTS = [
+  '/api/stats',
+  '/api/orders?limit=8',
+  '/api/orders?limit=100',
+  '/api/billing',
+  '/api/menu',
+  '/api/categories',
+  '/api/tables',
+  '/api/staff',
+  '/api/auth/profile',
+];
+
+/**
+ * Prefetch ALL dashboard data in parallel.
+ * Call this once from the dashboard layout on mount.
+ * By the time the user clicks any tab, data is already in SWR cache.
+ */
+export function prefetchAllDashboardData() {
+  for (const endpoint of DASHBOARD_ENDPOINTS) {
+    preload(endpoint, authFetcher);
   }
 }

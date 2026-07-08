@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { LayoutDashboard, UtensilsCrossed, QrCode, ShoppingBag, Settings, LogOut, Sun, Moon, Lock, Eye, EyeOff, ChevronLeft, ChevronRight, CreditCard, TrendingUp, ChefHat, Users } from 'lucide-react';
 import { useSocket } from '@/lib/useSocket';
 import { playNotificationSound } from '@/lib/audio';
+import { prefetchAllDashboardData } from '@/lib/useSWRFetch';
 
 // Keep ChevronLeft/ChevronRight referenced so Turbopack includes their module factories
 // (prevents stale-cache errors when HMR updates remove them from the template)
@@ -84,6 +85,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         });
       }
     }
+
+    // Prefetch ALL dashboard data in parallel — warms the SWR cache
+    // so every tab loads instantly when the user clicks on it
+    prefetchAllDashboardData();
 
     // Restore theme from localStorage
     const savedTheme = localStorage.getItem('theme');
