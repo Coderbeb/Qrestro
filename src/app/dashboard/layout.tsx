@@ -17,6 +17,7 @@ const NAV_SECTIONS = [
     items: [
       { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} />, id: '' },
       { href: '/dashboard/orders', label: 'Orders', icon: <ShoppingBag size={18} />, id: 'orders' },
+      { href: '/dashboard/kds', label: 'Kitchen (KDS)', icon: <ChefHat size={18} />, id: 'kds' },
       { href: '/dashboard/billing', label: 'Billing', icon: <CreditCard size={18} />, id: 'billing' },
     ]
   },

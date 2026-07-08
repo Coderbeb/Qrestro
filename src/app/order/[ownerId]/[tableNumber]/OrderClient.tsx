@@ -270,11 +270,11 @@ export default function OrderClient({
     
     verifySession();
 
-    // Auto-refresh the page in the background every 15 seconds to fetch latest menu updates
-    // (This respects the 60s Next.js server cache, so changes will appear within ~1 minute)
+    // Auto-refresh the page and verify session every 3 seconds for instant real-time updates
     const refreshInterval = setInterval(() => {
+      verifySession();
       router.refresh();
-    }, 15000);
+    }, 3000);
 
     return () => clearInterval(refreshInterval);
   }, [ownerId, tableNumber, serverError, loadTrackedOrders, router]);
