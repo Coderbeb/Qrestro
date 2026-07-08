@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useRef, useMemo } from 'react';
-import { Plus, MoreVertical, Eye, Download, ExternalLink, Copy, RefreshCw, Pause, Play, Trash2, Utensils, QrCode, X, Sparkles } from 'lucide-react';
+import { Plus, MoreVertical, Eye, Download, ExternalLink, Copy, RefreshCw, Pause, Play, Trash2, Utensils, QrCode, X, Sparkles, Printer } from 'lucide-react';
 import { getAuthHeader } from '@/lib/api';
 import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 import { useSocket } from '@/lib/useSocket';
@@ -200,8 +200,30 @@ export default function TablesPage() {
               <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500 }}>{restaurantName} · Table {viewQR.tableNumber}</div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', padding: '0 1.5rem 1.5rem' }}>
-              <button className="btn btn-primary btn-full" onClick={() => handleBrandedDownload(viewQR)} disabled={brandDownloading === viewQR.id} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                <Download size={16} /> {brandDownloading === viewQR.id ? 'Preparing...' : 'Download / Print QR'}
+              <button 
+                className="btn btn-secondary btn-full" 
+                onClick={() => {
+                  if (!viewQR.qrCodeImageUrl) return;
+                  const a = document.createElement('a');
+                  a.href = viewQR.qrCodeImageUrl;
+                  a.download = `Table_${viewQR.tableNumber}_QR.png`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  showToast('QR image saved!');
+                }} 
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+              >
+                <Download size={16} /> Save QR Image
+              </button>
+              
+              <button 
+                className="btn btn-primary btn-full" 
+                onClick={() => handleBrandedDownload(viewQR)} 
+                disabled={brandDownloading === viewQR.id} 
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+              >
+                <Printer size={16} /> {brandDownloading === viewQR.id ? 'Preparing...' : 'Print Branded Tent'}
               </button>
             </div>
           </div>

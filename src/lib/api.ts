@@ -6,5 +6,7 @@
  */
 export function getAuthHeader(): Record<string, string> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const staffToken = typeof window !== 'undefined' ? localStorage.getItem('staffToken') : '';
+  const authToken = token || staffToken || '';
+  return { Authorization: `Bearer ${authToken}`, 'Content-Type': 'application/json' };
 }
