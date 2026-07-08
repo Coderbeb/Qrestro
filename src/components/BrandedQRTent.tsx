@@ -336,7 +336,7 @@ export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, ta
         /* ----- Print specific styles ----- */
         @media print {
           @page {
-             size: portrait;
+             size: auto;
              margin: 0;
           }
           html, body {
@@ -344,6 +344,7 @@ export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, ta
             margin: 0 !important;
             padding: 0 !important;
             overflow: hidden !important;
+            background: white !important;
           }
           body {
             -webkit-print-color-adjust: exact !important;
@@ -359,15 +360,34 @@ export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, ta
             visibility: visible;
           }
           .printable-area {
-            position: relative !important;
-            left: auto !important;
-            top: auto !important;
-            transform: none !important;
-            margin: 0 auto !important;
+            position: absolute !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            width: 10.16cm !important;
+            height: 15.24cm !important;
+            margin: 0 !important;
             box-shadow: none !important;
             page-break-after: avoid !important;
             page-break-before: avoid !important;
             page-break-inside: avoid !important;
+            /* Add Cut Lines for easy cutting */
+            outline: 1.5px dashed #ccc !important;
+            outline-offset: 8px !important;
+          }
+          .printable-area::before {
+             content: '✂️ CUT ALONG DOTTED LINE';
+             position: absolute;
+             top: -24px;
+             left: 50%;
+             transform: translateX(-50%);
+             font-size: 10px;
+             font-family: sans-serif;
+             font-weight: bold;
+             color: #666;
+             letter-spacing: 2px;
+             white-space: nowrap;
+             visibility: visible;
           }
           /* Hide scrollbars during print */
           ::-webkit-scrollbar { display: none; }

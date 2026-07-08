@@ -104,14 +104,6 @@ export default function TablesPage() {
     setPrintingTable(table);
   }
 
-  function plainDownload(table: Table) {
-    if (!table.qrCodeImageUrl) return;
-    const link = document.createElement('a');
-    link.href = table.qrCodeImageUrl;
-    link.download = `qr-table-${table.tableNumber}.png`;
-    link.click();
-  }
-
   function copyLink(table: Table) { navigator.clipboard.writeText(table.qrCodeData); showToast('Link copied!'); }
   function toggleDropdown(e: React.MouseEvent, id: string) { e.stopPropagation(); setActiveDropdown(prev => prev === id ? null : id); }
 
@@ -173,8 +165,7 @@ export default function TablesPage() {
                 {activeDropdown === table.id && (
                   <div className="table-dropdown-menu">
                     <button className="dropdown-item" onClick={() => { setViewQR(table); setActiveDropdown(null); }}><Eye size={14} /> View QR Code</button>
-                    <button className="dropdown-item" onClick={() => { handleBrandedDownload(table); setActiveDropdown(null); }} disabled={brandDownloading === table.id}><Sparkles size={14} /> {brandDownloading === table.id ? 'Preparing...' : 'Print Branded QR'}</button>
-                    <button className="dropdown-item" onClick={() => { plainDownload(table); setActiveDropdown(null); }}><Download size={14} /> Download Plain QR</button>
+                    <button className="dropdown-item" onClick={() => { handleBrandedDownload(table); setActiveDropdown(null); }} disabled={brandDownloading === table.id}><Download size={14} /> {brandDownloading === table.id ? 'Preparing...' : 'Download / Print QR'}</button>
                     <button className="dropdown-item" onClick={() => { copyLink(table); setActiveDropdown(null); }}><Copy size={14} /> Copy Link</button>
                     <div style={{ height: 1, background: 'var(--border)', margin: '0.25rem 0' }} />
                     <button className="dropdown-item" onClick={() => { toggleActive(table); setActiveDropdown(null); }}>{table.isActive ? <><Pause size={14} /> Deactivate</> : <><Play size={14} /> Activate</>}</button>
@@ -211,9 +202,8 @@ export default function TablesPage() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', padding: '0 1.5rem 1.5rem' }}>
               <button className="btn btn-primary btn-full" onClick={() => handleBrandedDownload(viewQR)} disabled={brandDownloading === viewQR.id} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                <Sparkles size={16} /> {brandDownloading === viewQR.id ? 'Preparing...' : 'Print Branded QR'}
+                <Download size={16} /> {brandDownloading === viewQR.id ? 'Preparing...' : 'Download / Print QR'}
               </button>
-              <button className="btn btn-ghost btn-full" onClick={() => plainDownload(viewQR)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}><Download size={16} /> Download Plain PNG</button>
             </div>
           </div>
         </div>

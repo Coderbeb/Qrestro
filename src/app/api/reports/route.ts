@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
           COUNT(*)::bigint as total_orders,
           COALESCE(SUM(total_amount), 0) as total_revenue
         FROM orders
-        WHERE owner_id = ${user.id}
+        WHERE owner_id = ${user.id}::uuid
           AND status = 'completed'
           AND created_at >= ${startDate}
           AND created_at <= ${endDate}
@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
           TO_CHAR(created_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD') as date,
           COALESCE(SUM(total_amount), 0) as revenue
         FROM orders
-        WHERE owner_id = ${user.id}
+        WHERE owner_id = ${user.id}::uuid
           AND status = 'completed'
           AND created_at >= ${startDate}
           AND created_at <= ${endDate}
@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
           COALESCE(SUM(oi.price * oi.quantity), 0) as revenue
         FROM order_items oi
         JOIN orders o ON oi.order_id = o.id
-        WHERE o.owner_id = ${user.id}
+        WHERE o.owner_id = ${user.id}::uuid
           AND o.status = 'completed'
           AND o.created_at >= ${startDate}
           AND o.created_at <= ${endDate}

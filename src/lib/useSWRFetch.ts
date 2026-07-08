@@ -19,7 +19,7 @@ export async function authFetcher<T>(url: string): Promise<T> {
   });
 
   if (!res.ok) {
-    const error = new Error('Fetch failed');
+    const error = new Error(`Fetch failed for ${url}: ${res.status} ${res.statusText}`);
     throw error;
   }
 

@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     where: { id: user.id },
     select: { id: true, username: true, email: true, restaurantName: true, ownerName: true, phone: true, cuisine: true, createdAt: true }
   });
-  if (!owner) return NextResponse.json({ success: false, error: { code: 'NOT_FOUND', message: 'Owner not found' } }, { status: 404 });
+  if (!owner) return NextResponse.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Owner not found (account may have been deleted)' } }, { status: 401 });
 
   return NextResponse.json({ success: true, data: owner });
 }
