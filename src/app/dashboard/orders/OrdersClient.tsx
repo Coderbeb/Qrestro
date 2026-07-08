@@ -74,8 +74,8 @@ export default function OrdersPage() {
   const [manualOrderNotes, setManualOrderNotes] = useState('');
 
   // SWR: fetch orders and billing with instant cache on re-mount, and poll every 5 seconds for real-time updates
-  const { data: swrOrders, isLoading: ordersLoading } = useSWRFetch<Order[]>('/api/orders?limit=100', { refreshInterval: 5000 });
-  const { data: swrBilling, isLoading: billingLoading } = useSWRFetch<any[]>('/api/billing', { refreshInterval: 5000 });
+  const { data: swrOrders, isLoading: ordersLoading } = useSWRFetch<Order[]>('/api/orders?limit=100', { refreshInterval: 3000 });
+  const { data: swrBilling, isLoading: billingLoading } = useSWRFetch<any[]>('/api/billing', { refreshInterval: 3000 });
   const loading = ordersLoading;
 
   // Seed local state from SWR cache (only when SWR returns fresh data)

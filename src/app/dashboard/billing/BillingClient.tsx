@@ -21,7 +21,7 @@ type TableBilling = {
 };
 
 export default function BillingPage() {
-  const { data: tables = [], isLoading: loading, mutate } = useSWRFetch<TableBilling[]>('/api/billing', { refreshInterval: 5000 });
+  const { data: tables = [], isLoading: loading, mutate } = useSWRFetch<TableBilling[]>('/api/billing', { refreshInterval: 3000 });
   const [owner, setOwner] = useState<{ id?: string; restaurantName?: string } | null>(null);
   const [selectedTable, setSelectedTable] = useState<TableBilling | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
