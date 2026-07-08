@@ -14,20 +14,9 @@ type ReportData = {
   topItems: { name: string; quantity: number; revenue: number }[];
 };
 
-// Build API URL based on preset
+// Build API URL based on preset — use a stable key so SWR cache works
 function getReportUrl(preset: 'today' | '7days' | '30days'): string {
-  const end = new Date();
-  const start = new Date();
-  if (preset === 'today') {
-    start.setHours(0, 0, 0, 0);
-  } else if (preset === '7days') {
-    start.setDate(start.getDate() - 7);
-    start.setHours(0, 0, 0, 0);
-  } else {
-    start.setDate(start.getDate() - 30);
-    start.setHours(0, 0, 0, 0);
-  }
-  return `/api/reports?startDate=${start.toISOString()}&endDate=${end.toISOString()}`;
+  return `/api/reports?preset=${preset}`;
 }
 
 export default function ReportsPage() {

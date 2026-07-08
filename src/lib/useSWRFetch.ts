@@ -86,6 +86,7 @@ const DASHBOARD_ENDPOINTS = [
   '/api/tables',
   '/api/staff',
   '/api/auth/profile',
+  '/api/reports?preset=today',
 ];
 
 /**

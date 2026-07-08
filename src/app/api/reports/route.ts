@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const searchParams = request.nextUrl.searchParams;
+    const preset = searchParams.get('preset');
     const startStr = searchParams.get('startDate');
     const endStr = searchParams.get('endDate');
 
@@ -20,19 +21,33 @@ export async function GET(request: NextRequest) {
     let endDate = new Date();
     endDate.setHours(23, 59, 59, 999);
 
-    if (startStr) {
-      const parsed = new Date(startStr);
-      if (!isNaN(parsed.getTime())) {
-        startDate = parsed;
+    // Support preset-based ranges for stable SWR cache keys
+    if (preset === 'today') {
+      startDate = new Date();
+      startDate.setHours(0, 0, 0, 0);
+    } else if (preset === '7days') {
+      startDate = new Date();
+      startDate.setDate(startDate.getDate() - 7);
+      startDate.setHours(0, 0, 0, 0);
+    } else if (preset === '30days') {
+      startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
+      startDate.setHours(0, 0, 0, 0);
+    } else {
+      // Legacy: support explicit startDate/endDate params
+      if (startStr) {
+        const parsed = new Date(startStr);
+        if (!isNaN(parsed.getTime())) {
+          startDate = parsed;
+        }
+      }
+      if (endStr) {
+        const parsed = new Date(endStr);
+        if (!isNaN(parsed.getTime())) {
+          endDate = parsed;
+        }
       }
     }
-    if (endStr) {
-      const parsed = new Date(endStr);
-      if (!isNaN(parsed.getTime())) {
-        endDate = parsed;
-      }
-    }
-
     // Query completed orders in range
     const orders = await prisma.order.findMany({
       where: {
