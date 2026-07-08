@@ -217,7 +217,7 @@ export default function OrderClient({
     }
   }
 
-  // Background session verification
+  // Background session verification and automatic menu refresh
   useEffect(() => {
     if (serverError) return;
 
@@ -269,7 +269,15 @@ export default function OrderClient({
     }
     
     verifySession();
-  }, [ownerId, tableNumber, serverError, loadTrackedOrders]);
+
+    // Auto-refresh the page in the background every 15 seconds to fetch latest menu updates
+    // (This respects the 60s Next.js server cache, so changes will appear within ~1 minute)
+    const refreshInterval = setInterval(() => {
+      router.refresh();
+    }, 15000);
+
+    return () => clearInterval(refreshInterval);
+  }, [ownerId, tableNumber, serverError, loadTrackedOrders, router]);
 
   function addToCart(item: MenuItem) {
     setCart(prev => { const next = new Map(prev); const ex = next.get(item.id); if (ex) next.set(item.id, { ...ex, quantity: ex.quantity + 1 }); else next.set(item.id, { menuItem: item, quantity: 1 }); return next; });

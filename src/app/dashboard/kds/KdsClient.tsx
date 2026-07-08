@@ -97,7 +97,8 @@ export default function KDSPage() {
 
     const interval = setInterval(() => {
       setTimeTick(t => t + 1);
-    }, 30000);
+      loadKDSOrders();
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [loadKDSOrders]);

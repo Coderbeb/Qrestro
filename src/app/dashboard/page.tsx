@@ -24,8 +24,8 @@ type RecentOrder = {
 };
 
 export default function DashboardPage() {
-  const { data: stats, isLoading: statsLoading } = useSWRFetch<Stats>('/api/stats');
-  const { data: recentOrders, isLoading: ordersLoading } = useSWRFetch<RecentOrder[]>('/api/orders?limit=8');
+  const { data: stats, isLoading: statsLoading } = useSWRFetch<Stats>('/api/stats', { refreshInterval: 5000 });
+  const { data: recentOrders, isLoading: ordersLoading } = useSWRFetch<RecentOrder[]>('/api/orders?limit=8', { refreshInterval: 5000 });
   const loading = statsLoading || ordersLoading;
 
   const [ownerId, setOwnerId] = useState<string | null>(null);
