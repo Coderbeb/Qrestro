@@ -14,10 +14,10 @@ export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, ta
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Great+Vibes&display=swap');
 
         .branded-qr-tent {
-          width: 500px;
-          height: 700px; /* Adjust height to match the ratio */
+          width: 10.16cm;
+          height: 15.24cm;
           background-color: #f7f3e8; /* Soft cream */
-          border-radius: 24px;
+          border-radius: 16px;
           position: relative;
           overflow: hidden;
           font-family: 'Cormorant Garamond', serif;
@@ -29,6 +29,9 @@ export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, ta
           margin: 0 auto;
           box-sizing: border-box;
           z-index: 1;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          page-break-inside: avoid;
         }
 
         /* Subtle botanical background patterns */
@@ -38,15 +41,15 @@ export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, ta
           z-index: -1;
         }
         .tent-bg-leaf.top-left {
-          top: -20px;
-          left: -20px;
-          width: 150px;
+          top: -10px;
+          left: -10px;
+          width: 100px;
           transform: rotate(15deg);
         }
         .tent-bg-leaf.right-mid {
           top: 30%;
-          right: -40px;
-          width: 180px;
+          right: -20px;
+          width: 120px;
           transform: rotate(-15deg) scaleX(-1);
         }
 
@@ -54,22 +57,22 @@ export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, ta
         .tent-ribbon {
           position: absolute;
           top: 0;
-          right: 30px;
+          right: 20px;
           background-color: #123524;
           color: #c59b5f;
-          padding: 15px 12px 25px 12px;
-          width: 70px;
+          padding: 10px 8px 15px 8px;
+          width: 50px;
           text-align: center;
-          font-size: 11px;
+          font-size: 8px;
           font-weight: 700;
           letter-spacing: 0.5px;
           clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 85%, 0 100%);
-          line-height: 1.4;
-          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          line-height: 1.3;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
         .tent-header {
-          margin-top: 50px;
+          margin-top: 30px;
           text-align: center;
           display: flex;
           flex-direction: column;
@@ -78,7 +81,7 @@ export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, ta
 
         .tent-logo-icon {
           color: #c59b5f;
-          margin-bottom: 15px;
+          margin-bottom: 10px;
           position: relative;
           display: flex;
           align-items: center;
@@ -88,45 +91,45 @@ export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, ta
         .tent-logo-icon::before {
           content: '';
           position: absolute;
-          top: -15px;
-          width: 80px;
-          height: 40px;
-          border-top-left-radius: 40px;
-          border-top-right-radius: 40px;
+          top: -10px;
+          width: 60px;
+          height: 30px;
+          border-top-left-radius: 30px;
+          border-top-right-radius: 30px;
           border: 1.5px solid #123524;
           border-bottom: none;
         }
 
         .tent-restaurant-name {
-          font-size: 32px;
+          font-size: 22px;
           font-weight: 700;
-          letter-spacing: 1.5px;
+          letter-spacing: 1px;
           text-transform: uppercase;
-          margin: 5px 0 0 0;
+          margin: 0;
           line-height: 1.1;
           color: #123524;
         }
 
         .tent-subtitle {
-          font-size: 12px;
+          font-size: 9px;
           font-family: sans-serif;
-          letter-spacing: 3px;
+          letter-spacing: 2px;
           color: #c59b5f;
           text-transform: uppercase;
-          margin-top: 5px;
+          margin-top: 3px;
           font-weight: 600;
         }
 
         .tent-tagline {
           font-family: 'Great Vibes', cursive;
-          font-size: 28px;
-          margin-top: 5px;
+          font-size: 20px;
+          margin-top: 4px;
           color: #123524;
         }
 
         /* Central QR Area */
         .tent-qr-section {
-          margin-top: 30px;
+          margin-top: 20px;
           position: relative;
           display: flex;
           align-items: center;
@@ -136,17 +139,17 @@ export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, ta
 
         .tent-qr-card {
           background: #fff;
-          padding: 15px;
-          border-radius: 16px;
-          border: 3px solid #c59b5f;
-          box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+          padding: 10px;
+          border-radius: 12px;
+          border: 2px solid #c59b5f;
+          box-shadow: 0 5px 15px rgba(0,0,0,0.08);
           position: relative;
           z-index: 2;
         }
 
         .tent-qr-card img {
-          width: 180px;
-          height: 180px;
+          width: 130px;
+          height: 130px;
           display: block;
         }
 
@@ -156,10 +159,10 @@ export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, ta
           left: 50%;
           transform: translate(-50%, -50%);
           background: #123524;
-          width: 44px;
-          height: 44px;
+          width: 32px;
+          height: 32px;
           border-radius: 50%;
-          border: 3px solid #c59b5f;
+          border: 2px solid #c59b5f;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -177,29 +180,29 @@ export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, ta
           text-align: center;
         }
         
-        .tent-side-indicator.left { left: 35px; }
-        .tent-side-indicator.right { right: 35px; }
+        .tent-side-indicator.left { left: 15px; }
+        .tent-side-indicator.right { right: 15px; }
 
         .tent-side-icon-wrap {
-          width: 46px;
-          height: 46px;
+          width: 32px;
+          height: 32px;
           border-radius: 50%;
-          border: 1.5px solid #123524;
+          border: 1.2px solid #123524;
           display: flex;
           align-items: center;
           justify-content: center;
-          margin-bottom: 8px;
+          margin-bottom: 4px;
           background: transparent;
         }
 
         .tent-side-text {
-          font-size: 14px;
+          font-size: 10px;
           font-weight: 700;
           margin-bottom: 2px;
           text-transform: uppercase;
         }
         .tent-side-subtext {
-          font-size: 10px;
+          font-size: 7px;
           font-family: sans-serif;
           letter-spacing: 0.5px;
         }
@@ -210,9 +213,9 @@ export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, ta
           width: 100%;
           background: #123524;
           color: #c59b5f;
-          padding: 40px 20px 20px 20px;
-          border-top-left-radius: 50% 15px; /* Creates the slight wave effect */
-          border-top-right-radius: 50% 15px;
+          padding: 25px 15px 15px 15px;
+          border-top-left-radius: 50% 10px; 
+          border-top-right-radius: 50% 10px;
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -222,13 +225,13 @@ export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, ta
         .tent-bottom::before {
            content: '';
            position: absolute;
-           top: -20px;
+           top: -12px;
            left: 0;
            width: 100%;
-           height: 40px;
+           height: 25px;
            background: #123524;
-           border-top-left-radius: 50% 30px;
-           border-top-right-radius: 50% 20px;
+           border-top-left-radius: 50% 20px;
+           border-top-right-radius: 50% 15px;
            z-index: -1;
         }
 
@@ -236,8 +239,8 @@ export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, ta
           display: flex;
           justify-content: space-between;
           width: 100%;
-          max-width: 400px;
-          margin-bottom: 20px;
+          max-width: 300px;
+          margin-bottom: 10px;
         }
 
         .tent-feature {
@@ -249,89 +252,96 @@ export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, ta
         }
 
         .tent-feature-icon {
-          width: 40px;
-          height: 40px;
+          width: 28px;
+          height: 28px;
           border-radius: 50%;
           border: 1px dashed #c59b5f;
           display: flex;
           align-items: center;
           justify-content: center;
-          margin-bottom: 8px;
+          margin-bottom: 4px;
           position: relative;
         }
         
         .tent-feature-icon::before {
            content: '';
            position: absolute;
-           top: -3px; left: 50%; transform: translateX(-50%);
-           width: 8px; height: 1.5px; background: #c59b5f;
+           top: -2px; left: 50%; transform: translateX(-50%);
+           width: 6px; height: 1px; background: #c59b5f;
         }
 
         .tent-feature-title {
-          font-size: 11px;
+          font-size: 8px;
           font-family: sans-serif;
           font-weight: 700;
           letter-spacing: 0.5px;
-          line-height: 1.2;
+          line-height: 1.1;
           color: #fff;
         }
         
         .tent-feature-subtitle {
-          font-size: 10px;
+          font-size: 7px;
           font-family: sans-serif;
           color: #c59b5f;
-          margin-top: 2px;
+          margin-top: 1px;
         }
 
         .tent-footer {
           text-align: center;
-          margin-top: 10px;
+          margin-top: 5px;
           position: relative;
           width: 100%;
         }
 
         .tent-footer-script {
           font-family: 'Great Vibes', cursive;
-          font-size: 26px;
+          font-size: 18px;
           color: #c59b5f;
-          margin-bottom: -5px;
+          margin-bottom: -3px;
         }
 
         .tent-footer-caps {
-          font-size: 12px;
+          font-size: 8px;
           font-family: sans-serif;
-          letter-spacing: 4px;
+          letter-spacing: 3px;
           font-weight: 600;
           color: #fff;
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 15px;
+          gap: 10px;
         }
         
         .tent-footer-caps::before,
         .tent-footer-caps::after {
           content: '';
           height: 1px;
-          width: 30px;
+          width: 20px;
           background: #c59b5f;
         }
 
         .table-number-badge {
           position: absolute;
-          bottom: 20px;
-          left: 20px;
-          font-size: 14px;
+          bottom: 12px;
+          left: 12px;
+          font-size: 10px;
           font-weight: 700;
           font-family: sans-serif;
           color: rgba(255,255,255,0.3);
           border: 1px solid rgba(255,255,255,0.2);
-          padding: 4px 10px;
+          padding: 2px 6px;
           border-radius: 4px;
         }
 
         /* ----- Print specific styles ----- */
         @media print {
+          @page {
+             margin: 0;
+          }
+          body {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
           body * {
             visibility: hidden;
           }
