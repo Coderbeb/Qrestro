@@ -3,7 +3,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { getAuthHeader } from '@/lib/api';
 import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 import { useSocket } from '@/lib/useSocket';
-import { ShoppingBag, Printer, CheckCircle, RefreshCw, X, Search } from 'lucide-react';
+import { ShoppingBag, Printer, CheckCircle, RefreshCw, X, Search, Clock, Utensils, IndianRupee, Receipt } from 'lucide-react';
 import { useSWRFetch, invalidateCache, getAdaptiveInterval } from '@/lib/useSWRFetch';
 
 type BillingSession = {
@@ -310,6 +310,7 @@ export default function BillingPage() {
               {filteredTables.map(table => {
                 const isIdle = table.status === 'idle';
                 const isUnpaid = table.status === 'completed_unpaid';
+                const isActive = table.status === 'active';
                 const session = table.session;
 
                 return (
