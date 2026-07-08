@@ -9,74 +9,7 @@ import { useSWRFetch } from '@/lib/useSWRFetch';
 type Table = { id: string; tableNumber: number; qrCodeImageUrl: string | null; qrCodeData: string; isActive: boolean; };
 type Order = { id: string; tableNumber: number; status: string; };
 
-/** Draws a branded QR image on a canvas and triggers download */
-async function downloadBrandedQR(qrUrl: string, tableNumber: number, restaurantName: string) {
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.src = qrUrl;
-  await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; });
-
-  const PAD = 32;
-  const BRAND_H = 68; // space at top for restaurant name
-  const TABLE_H = 48; // space at bottom for table number
-  const QR_SIZE = Math.min(img.width, img.height);
-  const W = QR_SIZE + PAD * 2;
-  const H = QR_SIZE + BRAND_H + TABLE_H + PAD * 2;
-
-  const canvas = document.createElement('canvas');
-  canvas.width = W; canvas.height = H;
-  const ctx = canvas.getContext('2d')!;
-
-  // Background
-  ctx.fillStyle = '#0a0a12';
-  ctx.fillRect(0, 0, W, H);
-
-  // Gradient top
-  const grad = ctx.createLinearGradient(0, 0, W, 0);
-  grad.addColorStop(0, 'rgba(3,77,55,0.18)');
-  grad.addColorStop(1, 'rgba(197,168,128,0.1)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, BRAND_H + PAD);
-
-  // Restaurant name
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 22px "Outfit", "Helvetica Neue", Arial, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(restaurantName, W / 2, PAD + BRAND_H / 2 - 4, W - PAD * 2);
-
-  // Tagline
-  ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.font = '13px "Outfit", Arial, sans-serif';
-  ctx.fillText('Scan to view menu & order', W / 2, PAD + BRAND_H / 2 + 18, W - PAD * 2);
-
-  // White QR card
-  const qrX = PAD;
-  const qrY = PAD + BRAND_H;
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.roundRect(qrX - 8, qrY - 8, QR_SIZE + 16, QR_SIZE + 16, 16);
-  ctx.fill();
-
-  // QR image
-  ctx.drawImage(img, qrX, qrY, QR_SIZE, QR_SIZE);
-
-  // Table label at bottom
-  ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  ctx.font = 'bold 18px "Outfit", Arial, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(`Table ${tableNumber}`, W / 2, qrY + QR_SIZE + TABLE_H / 2 + 4, W - PAD * 2);
-
-  // Accent underline
-  ctx.fillStyle = 'rgba(3,77,55,0.8)';
-  ctx.fillRect(W / 2 - 24, qrY + QR_SIZE + TABLE_H - 2, 48, 3);
-
-  const link = document.createElement('a');
-  link.href = canvas.toDataURL('image/png');
-  link.download = `qr-table-${tableNumber}.png`;
-  link.click();
-}
+import { BrandedQRTent } from '@/components/BrandedQRTent';
 
 export default function TablesPage() {
   const [showAdd, setShowAdd] = useState(false);
@@ -89,6 +22,7 @@ export default function TablesPage() {
   const [viewQR, setViewQR] = useState<Table | null>(null);
   const [restaurantName, setRestaurantName] = useState('My Restaurant');
   const [brandDownloading, setBrandDownloading] = useState<string | null>(null);
+  const [printingTable, setPrintingTable] = useState<Table | null>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
@@ -112,6 +46,18 @@ export default function TablesPage() {
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, []);
+
+  useEffect(() => {
+    if (printingTable) {
+      // Allow DOM to render the printable area before triggering print
+      const timer = setTimeout(() => {
+        window.print();
+        setBrandDownloading(null);
+        setPrintingTable(null);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [printingTable]);
 
   // Refresh helper that invalidates SWR cache
   const loadData = () => { mutateTables(); mutateOrders(); };
@@ -152,12 +98,10 @@ export default function TablesPage() {
     finally { setRegenerating(null); }
   }
 
-  async function handleBrandedDownload(table: Table) {
+  function handleBrandedDownload(table: Table) {
     if (!table.qrCodeImageUrl) return;
     setBrandDownloading(table.id);
-    try { await downloadBrandedQR(table.qrCodeImageUrl, table.tableNumber, restaurantName); showToast('Branded QR downloaded!'); }
-    catch { showToast('Download failed — try plain download'); }
-    finally { setBrandDownloading(null); }
+    setPrintingTable(table);
   }
 
   function plainDownload(table: Table) {
@@ -229,7 +173,8 @@ export default function TablesPage() {
                 {activeDropdown === table.id && (
                   <div className="table-dropdown-menu">
                     <button className="dropdown-item" onClick={() => { setViewQR(table); setActiveDropdown(null); }}><Eye size={14} /> View QR Code</button>
-                    <button className="dropdown-item" onClick={() => { handleBrandedDownload(table); setActiveDropdown(null); }} disabled={brandDownloading === table.id}><Download size={14} /> {brandDownloading === table.id ? 'Generating…' : 'Download QR Code'}</button>
+                    <button className="dropdown-item" onClick={() => { handleBrandedDownload(table); setActiveDropdown(null); }} disabled={brandDownloading === table.id}><Sparkles size={14} /> {brandDownloading === table.id ? 'Preparing...' : 'Print Branded QR'}</button>
+                    <button className="dropdown-item" onClick={() => { plainDownload(table); setActiveDropdown(null); }}><Download size={14} /> Download Plain QR</button>
                     <button className="dropdown-item" onClick={() => { copyLink(table); setActiveDropdown(null); }}><Copy size={14} /> Copy Link</button>
                     <div style={{ height: 1, background: 'var(--border)', margin: '0.25rem 0' }} />
                     <button className="dropdown-item" onClick={() => { toggleActive(table); setActiveDropdown(null); }}>{table.isActive ? <><Pause size={14} /> Deactivate</> : <><Play size={14} /> Activate</>}</button>
@@ -266,12 +211,21 @@ export default function TablesPage() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', padding: '0 1.5rem 1.5rem' }}>
               <button className="btn btn-primary btn-full" onClick={() => handleBrandedDownload(viewQR)} disabled={brandDownloading === viewQR.id} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                <Sparkles size={16} /> {brandDownloading === viewQR.id ? 'Generating…' : 'Download Branded QR'}
+                <Sparkles size={16} /> {brandDownloading === viewQR.id ? 'Preparing...' : 'Print Branded QR'}
               </button>
               <button className="btn btn-ghost btn-full" onClick={() => plainDownload(viewQR)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}><Download size={16} /> Download Plain PNG</button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Render the printable component when triggered */}
+      {printingTable && (
+        <BrandedQRTent 
+          restaurantName={restaurantName} 
+          tableNumber={printingTable.tableNumber} 
+          qrCodeUrl={printingTable.qrCodeImageUrl || ''} 
+        />
       )}
 
       {toast && <div className="toast-container"><div className="toast toast-success">{toast}</div></div>}
