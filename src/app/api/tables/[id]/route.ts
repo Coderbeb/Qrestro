@@ -41,8 +41,9 @@ export async function PUT(
     let qrCodeData = existing.qrCodeData;
 
     if (regenerateQR) {
-      const requestHost = request.headers.get('host');
-      const orderUrl = buildOrderUrl(user.id, existing.tableNumber, requestHost);
+      const requestHost = request.headers.get('x-forwarded-host') || request.headers.get('host');
+      const cleanHost = requestHost ? requestHost.split(',')[0].trim() : null;
+      const orderUrl = buildOrderUrl(user.id, existing.tableNumber, cleanHost);
       qrCodeData = orderUrl;
       qrCodeImageUrl = await generateQRCodeDataURL(orderUrl);
     }

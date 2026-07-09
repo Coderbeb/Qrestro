@@ -5,11 +5,12 @@ interface BrandedQRTentProps {
   restaurantName: string;
   tableNumber: number;
   qrCodeUrl: string;
+  isPreview?: boolean;
 }
 
-export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, tableNumber, qrCodeUrl }) => {
+export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, tableNumber, qrCodeUrl, isPreview }) => {
   return (
-    <div className="branded-qr-tent-wrapper">
+    <div className="branded-qr-tent-wrapper" style={isPreview ? { display: 'flex', justifyContent: 'center', overflow: 'hidden', height: 360 } : {}}>
       <style dangerouslySetInnerHTML={{ __html: `
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Great+Vibes&display=swap');
 
@@ -394,7 +395,7 @@ export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, ta
         }
       ` }} />
 
-      <div className="branded-qr-tent printable-area">
+      <div className={`branded-qr-tent ${!isPreview ? 'printable-area' : ''}`} style={isPreview ? { transform: 'scale(0.55)', transformOrigin: 'top center', boxShadow: '0 6px 25px rgba(0,0,0,0.12)' } : {}}>
         {/* Placeholder Botanical SVG Backgrounds */}
         <svg className="tent-bg-leaf top-left" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
           <path d="M10,90 Q10,10 90,10 Q80,50 50,60 Q20,70 10,90 Z" fill="none" stroke="#123524" strokeWidth="1"/>

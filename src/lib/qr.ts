@@ -35,16 +35,19 @@ export function buildOrderUrl(ownerId: string, tableNumber: number, requestHost?
 
   // 1. Explicit env variable (set this in Vercel project settings)
   if (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes('localhost')) {
-    return `${process.env.NEXT_PUBLIC_APP_URL}${path}`;
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, '');
+    return `${baseUrl}${path}`;
   }
 
   // 2. Derive from the incoming request host header at runtime
   if (requestHost) {
-    const protocol = requestHost.includes('localhost') ? 'http' : 'https';
-    return `${protocol}://${requestHost}${path}`;
+    const cleanHost = requestHost.split(',')[0].trim();
+    const protocol = cleanHost.includes('localhost') ? 'http' : 'https';
+    return `${protocol}://${cleanHost}${path}`;
   }
 
   // 3. Fallback to env variable as-is (may be localhost in dev)
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/+$/, '');
   return `${appUrl}${path}`;
 }
+

@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useRef, useMemo } from 'react';
-import { Plus, MoreVertical, Eye, Download, ExternalLink, Copy, RefreshCw, Pause, Play, Trash2, Utensils, QrCode, X, Sparkles, Printer } from 'lucide-react';
+import { Plus, MoreVertical, Eye, ExternalLink, Copy, RefreshCw, Pause, Play, Trash2, Utensils, QrCode, X, Sparkles, Printer } from 'lucide-react';
 import { getAuthHeader } from '@/lib/api';
 import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 import { useSocket } from '@/lib/useSocket';
@@ -191,32 +191,15 @@ export default function TablesPage() {
               <h3 className="modal-title">Table {viewQR.tableNumber} QR</h3>
               <button className="btn btn-ghost btn-icon" onClick={() => setViewQR(null)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} /></button>
             </div>
-            <div style={{ padding: '1.25rem 2rem' }}>
-              {viewQR.qrCodeImageUrl && (
-                <div style={{ background: '#fff', borderRadius: 16, padding: 16, display: 'inline-block', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
-                  <img src={viewQR.qrCodeImageUrl} alt="QR Code" style={{ width: 200, height: 200, display: 'block' }} />
-                </div>
-              )}
-              <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500 }}>{restaurantName} · Table {viewQR.tableNumber}</div>
+            <div style={{ padding: '0.5rem 1rem' }}>
+              <BrandedQRTent 
+                restaurantName={restaurantName} 
+                tableNumber={viewQR.tableNumber} 
+                qrCodeUrl={viewQR.qrCodeImageUrl || ''} 
+                isPreview={true} 
+              />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', padding: '0 1.5rem 1.5rem' }}>
-              <button 
-                className="btn btn-secondary btn-full" 
-                onClick={() => {
-                  if (!viewQR.qrCodeImageUrl) return;
-                  const a = document.createElement('a');
-                  a.href = viewQR.qrCodeImageUrl;
-                  a.download = `Table_${viewQR.tableNumber}_QR.png`;
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  showToast('QR image saved!');
-                }} 
-                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
-              >
-                <Download size={16} /> Save QR Image
-              </button>
-              
               <button 
                 className="btn btn-primary btn-full" 
                 onClick={() => handleBrandedDownload(viewQR)} 

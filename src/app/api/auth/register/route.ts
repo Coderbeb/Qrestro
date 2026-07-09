@@ -88,10 +88,11 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    const requestHost = request.headers.get('host');
+    const requestHost = request.headers.get('x-forwarded-host') || request.headers.get('host');
+    const cleanHost = requestHost ? requestHost.split(',')[0].trim() : null;
     const tablePromises = [];
     for (let i = 1; i <= count; i++) {
-      const orderUrl = buildOrderUrl(owner.id, i, requestHost);
+      const orderUrl = buildOrderUrl(owner.id, i, cleanHost);
       tablePromises.push((async () => {
         const qrCodeImageUrl = await generateQRCodeDataURL(orderUrl);
         return {

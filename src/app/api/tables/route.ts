@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   if (!user) return NextResponse.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
 
   try {
-    const requestHost = request.headers.get('host');
+    const requestHost = request.headers.get('x-forwarded-host') || request.headers.get('host');
     const cacheKey = `tables:${user.id}`;
 
     const tables = await getCached(cacheKey, 300, async () => {
@@ -19,12 +19,16 @@ export async function GET(request: NextRequest) {
         orderBy: { tableNumber: 'asc' },
       });
 
-      // Auto-repair tables with invalid QR data (only on cache MISS, not every request)
+      const cleanHost = requestHost ? requestHost.split(',')[0].trim() : null;
+
+      // Auto-repair tables with invalid QR data or mismatched hostname
       for (const table of dbTables) {
         const isJson = table.qrCodeData && (table.qrCodeData.startsWith('{') || table.qrCodeData.startsWith('['));
-        const isLocalhost = table.qrCodeData && table.qrCodeData.includes('localhost') && !requestHost?.includes('localhost');
+        const isLocalhost = table.qrCodeData && table.qrCodeData.includes('localhost') && !cleanHost?.includes('localhost');
 
         let hasValidSignature = false;
+        let isHostMismatch = false;
+
         if (table.qrCodeData && !isJson && !isLocalhost) {
           try {
             const urlObj = new URL(table.qrCodeData);
@@ -32,13 +36,16 @@ export async function GET(request: NextRequest) {
             if (code === getTableSignature(user.id, table.tableNumber)) {
               hasValidSignature = true;
             }
+            if (cleanHost && !cleanHost.includes('localhost') && urlObj.host !== cleanHost && !process.env.NEXT_PUBLIC_APP_URL) {
+              isHostMismatch = true;
+            }
           } catch {
-            // ignore
+            isHostMismatch = true;
           }
         }
 
-        if (!table.qrCodeData || isJson || !table.qrCodeImageUrl || isLocalhost || !hasValidSignature) {
-          const orderUrl = buildOrderUrl(user.id, table.tableNumber, requestHost);
+        if (!table.qrCodeData || isJson || !table.qrCodeImageUrl || isLocalhost || !hasValidSignature || isHostMismatch) {
+          const orderUrl = buildOrderUrl(user.id, table.tableNumber, cleanHost);
           const qrCodeImageUrl = await generateQRCodeDataURL(orderUrl);
 
           await prisma.table.update({
@@ -101,8 +108,9 @@ export async function POST(request: NextRequest) {
       }, { status: 403 });
     }
 
-    const requestHost = request.headers.get('host');
-    const orderUrl = buildOrderUrl(user.id, tableNumber, requestHost);
+    const requestHost = request.headers.get('x-forwarded-host') || request.headers.get('host');
+    const cleanHost = requestHost ? requestHost.split(',')[0].trim() : null;
+    const orderUrl = buildOrderUrl(user.id, tableNumber, cleanHost);
     const qrCodeImageUrl = await generateQRCodeDataURL(orderUrl);
 
     const table = await prisma.table.create({
