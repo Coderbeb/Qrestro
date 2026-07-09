@@ -23,7 +23,6 @@ export default function TablesPage() {
   const [viewQR, setViewQR] = useState<Table | null>(null);
   const [restaurantName, setRestaurantName] = useState('My Restaurant');
   const [brandDownloading, setBrandDownloading] = useState<string | null>(null);
-  const [printingTable, setPrintingTable] = useState<Table | null>(null);
   const [savingImage, setSavingImage] = useState<string | null>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null);
 
@@ -48,18 +47,6 @@ export default function TablesPage() {
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, []);
-
-  useEffect(() => {
-    if (printingTable) {
-      // Allow DOM to render the printable area before triggering print
-      const timer = setTimeout(() => {
-        window.print();
-        setBrandDownloading(null);
-        setPrintingTable(null);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [printingTable]);
 
   // Refresh helper that invalidates SWR cache
   const loadData = () => { mutateTables(); mutateOrders(); };
@@ -100,16 +87,108 @@ export default function TablesPage() {
     finally { setRegenerating(null); }
   }
 
-  function handleBrandedDownload(table: Table) {
+  /**
+   * Capture the branded QR tent as a PNG and trigger the print dialog inside a hidden iframe.
+   * This is extremely robust and works perfectly on mobile phones (Safari/Chrome on iOS/Android)
+   * where printing DOM components directly with CSS visibility rules often yields a blank page.
+   */
+  const handleBrandedDownload = useCallback(async (table: Table) => {
     if (!table.qrCodeImageUrl) return;
     setBrandDownloading(table.id);
-    setPrintingTable(table);
-  }
+
+    // Render off-screen container with the full-size branded tent
+    const container = document.createElement('div');
+    container.style.cssText = 'position:fixed;left:-9999px;top:0;z-index:-1;pointer-events:none;';
+    document.body.appendChild(container);
+
+    // Use ReactDOM to render the tent into the container
+    const { createRoot } = await import('react-dom/client');
+    const React = await import('react');
+    const { BrandedQRTent: Tent } = await import('@/components/BrandedQRTent');
+
+    const root = createRoot(container);
+    root.render(
+      React.createElement(Tent, {
+        restaurantName,
+        tableNumber: table.tableNumber,
+        qrCodeUrl: table.qrCodeImageUrl || '',
+        isPreview: false,
+      })
+    );
+
+    // Wait for fonts + DOM to settle
+    await new Promise(r => setTimeout(r, 800));
+
+    try {
+      const tentEl = container.querySelector('.branded-qr-tent') as HTMLElement;
+      if (!tentEl) throw new Error('Tent element not found');
+
+      const dataUrl = await toPng(tentEl, {
+        cacheBust: true,
+        pixelRatio: 3, // High-res print output
+        backgroundColor: '#f7f3e8',
+      });
+
+      // Create a hidden print iframe
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+      document.body.appendChild(iframe);
+
+      const doc = iframe.contentWindow?.document;
+      if (!doc) throw new Error('Could not access iframe document');
+
+      doc.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Print QR Table ${table.tableNumber}</title>
+          <style>
+            @page {
+              size: 10.16cm 15.24cm;
+              margin: 0;
+            }
+            html, body {
+              margin: 0;
+              padding: 0;
+              width: 100%;
+              height: 100%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              background-color: #ffffff;
+            }
+            img {
+              max-width: 100%;
+              max-height: 100%;
+              object-fit: contain;
+              display: block;
+            }
+          </style>
+        </head>
+        <body>
+          <img src="${dataUrl}" onload="window.focus(); window.print();" />
+        </body>
+        </html>
+      `);
+      doc.close();
+
+      // Wait for print dialog to fire before cleaning up the iframe
+      await new Promise(r => setTimeout(r, 3000));
+      iframe.remove();
+    } catch (err) {
+      console.error('Print QR error:', err);
+      showToast('Failed to print. Please try again.');
+    } finally {
+      root.unmount();
+      container.remove();
+      setBrandDownloading(null);
+    }
+  }, [restaurantName]);
 
   /**
    * Capture the branded QR tent as a PNG and trigger a download.
-   * On mobile: uses Web Share API (native share sheet → "Save Image").
-   * On desktop: uses a traditional anchor download.
+   * Works on both mobile and desktop by rendering the tent off-screen
+   * at full size, capturing with html-to-image, then creating a blob URL.
    */
   const handleSaveQRImage = useCallback(async (table: Table) => {
     if (!table.qrCodeImageUrl) return;
@@ -148,36 +227,14 @@ export default function TablesPage() {
         backgroundColor: '#f7f3e8',
       });
 
-      // Convert data URL to blob
+      // Convert data URL to blob for reliable mobile download
       const res = await fetch(dataUrl);
       const blob = await res.blob();
-      const fileName = `QRestro-Table-${table.tableNumber}-QR.png`;
-
-      // Try Web Share API first (works on mobile — native share sheet)
-      const canShare = typeof navigator.share === 'function' && typeof navigator.canShare === 'function';
-      if (canShare) {
-        const file = new File([blob], fileName, { type: 'image/png' });
-        const shareData = { files: [file], title: `QRestro Table ${table.tableNumber} QR Code` };
-        if (navigator.canShare(shareData)) {
-          try {
-            await navigator.share(shareData);
-            showToast('QR image shared!');
-            return; // Share succeeded, skip anchor download
-          } catch (shareErr: unknown) {
-            // User cancelled the share sheet — that's fine, not an error
-            if (shareErr instanceof DOMException && shareErr.name === 'AbortError') {
-              return;
-            }
-            // Other share errors — fall through to anchor download
-          }
-        }
-      }
-
-      // Fallback: anchor download (works on desktop browsers)
       const blobUrl = URL.createObjectURL(blob);
+
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = fileName;
+      link.download = `QRestro-Table-${table.tableNumber}-QR.png`;
       link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
@@ -316,14 +373,7 @@ export default function TablesPage() {
         </div>
       )}
 
-      {/* Render the printable component when triggered */}
-      {printingTable && (
-        <BrandedQRTent 
-          restaurantName={restaurantName} 
-          tableNumber={printingTable.tableNumber} 
-          qrCodeUrl={printingTable.qrCodeImageUrl || ''} 
-        />
-      )}
+
 
       {toast && <div className="toast-container"><div className="toast toast-success">{toast}</div></div>}
     </>
