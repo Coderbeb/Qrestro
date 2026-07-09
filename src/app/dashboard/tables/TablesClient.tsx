@@ -1,10 +1,11 @@
 'use client';
-import { useEffect, useState, useRef, useMemo } from 'react';
-import { Plus, MoreVertical, Eye, ExternalLink, Copy, RefreshCw, Pause, Play, Trash2, Utensils, QrCode, X, Sparkles, Printer } from 'lucide-react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { Plus, MoreVertical, Eye, ExternalLink, Copy, RefreshCw, Pause, Play, Trash2, Utensils, QrCode, X, Sparkles, Printer, Download } from 'lucide-react';
 import { getAuthHeader } from '@/lib/api';
 import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton';
 import { useSocket } from '@/lib/useSocket';
 import { useSWRFetch } from '@/lib/useSWRFetch';
+import { toPng } from 'html-to-image';
 
 type Table = { id: string; tableNumber: number; qrCodeImageUrl: string | null; qrCodeData: string; isActive: boolean; };
 type Order = { id: string; tableNumber: number; status: string; };
@@ -23,6 +24,7 @@ export default function TablesPage() {
   const [restaurantName, setRestaurantName] = useState('My Restaurant');
   const [brandDownloading, setBrandDownloading] = useState<string | null>(null);
   const [printingTable, setPrintingTable] = useState<Table | null>(null);
+  const [savingImage, setSavingImage] = useState<string | null>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
@@ -103,6 +105,77 @@ export default function TablesPage() {
     setBrandDownloading(table.id);
     setPrintingTable(table);
   }
+
+  /**
+   * Capture the branded QR tent as a PNG and trigger a download.
+   * Works on both mobile and desktop by rendering the tent off-screen
+   * at full size, capturing with html-to-image, then creating a blob URL.
+   */
+  const handleSaveQRImage = useCallback(async (table: Table) => {
+    if (!table.qrCodeImageUrl) return;
+    setSavingImage(table.id);
+
+    // Render off-screen container with the full-size branded tent
+    const container = document.createElement('div');
+    container.style.cssText = 'position:fixed;left:-9999px;top:0;z-index:-1;pointer-events:none;';
+    document.body.appendChild(container);
+
+    // Use ReactDOM to render the tent into the container
+    const { createRoot } = await import('react-dom/client');
+    const React = await import('react');
+    const { BrandedQRTent: Tent } = await import('@/components/BrandedQRTent');
+
+    const root = createRoot(container);
+    root.render(
+      React.createElement(Tent, {
+        restaurantName,
+        tableNumber: table.tableNumber,
+        qrCodeUrl: table.qrCodeImageUrl || '',
+        isPreview: false,
+      })
+    );
+
+    // Wait for fonts + DOM to settle
+    await new Promise(r => setTimeout(r, 800));
+
+    try {
+      const tentEl = container.querySelector('.branded-qr-tent') as HTMLElement;
+      if (!tentEl) throw new Error('Tent element not found');
+
+      const dataUrl = await toPng(tentEl, {
+        cacheBust: true,
+        pixelRatio: 3, // High-res output
+        backgroundColor: '#f7f3e8',
+      });
+
+      // Convert data URL to blob for reliable mobile download
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `QRestro-Table-${table.tableNumber}-QR.png`;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+
+      // Cleanup after a short delay
+      setTimeout(() => {
+        URL.revokeObjectURL(blobUrl);
+        link.remove();
+      }, 1000);
+
+      showToast('QR image saved!');
+    } catch (err) {
+      console.error('Save QR image error:', err);
+      showToast('Failed to save image. Please try again.');
+    } finally {
+      root.unmount();
+      container.remove();
+      setSavingImage(null);
+    }
+  }, [restaurantName]);
 
   function copyLink(table: Table) { navigator.clipboard.writeText(table.qrCodeData); showToast('Link copied!'); }
   function toggleDropdown(e: React.MouseEvent, id: string) { e.stopPropagation(); setActiveDropdown(prev => prev === id ? null : id); }
@@ -202,6 +275,14 @@ export default function TablesPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', padding: '0 1.5rem 1.5rem' }}>
               <button 
                 className="btn btn-primary btn-full" 
+                onClick={() => handleSaveQRImage(viewQR)} 
+                disabled={savingImage === viewQR.id} 
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+              >
+                <Download size={16} /> {savingImage === viewQR.id ? 'Saving...' : 'Save QR Image'}
+              </button>
+              <button 
+                className="btn btn-ghost btn-full" 
                 onClick={() => handleBrandedDownload(viewQR)} 
                 disabled={brandDownloading === viewQR.id} 
                 style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}

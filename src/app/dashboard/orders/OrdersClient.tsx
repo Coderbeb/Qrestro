@@ -553,20 +553,6 @@ export default function OrdersPage() {
           .kanban-col-header {
             display: none !important;
           }
-        @media (max-width: 767px) {
-          .mobile-kanban-tabs {
-            display: flex;
-          }
-          .kanban-col {
-            display: none !important;
-          }
-          .kanban-col.mobile-active {
-            display: flex !important;
-            width: 100% !important;
-          }
-          .kanban-col-header {
-            display: none !important;
-          }
           .drawer-container {
             width: 100%;
             height: 100dvh !important;
@@ -647,7 +633,6 @@ export default function OrdersPage() {
           .mobile-close-btn {
             display: inline-flex !important;
           }
-        }
         }
       `}} />
 
@@ -1007,7 +992,7 @@ export default function OrdersPage() {
                   {/* Thermal Printer Layout Preview */}
                   <div className="receipt-preview">
                     <div className="receipt-header" style={{ textAlign: 'center', marginBottom: '1rem' }}>
-                      <h4 style={{ fontSize: '1.1rem', fontWeight: 'bold', margin: '0 0 0.2, 0', textTransform: 'uppercase', color: '#000000' }}>
+                      <h4 style={{ fontSize: '1.1rem', fontWeight: 'bold', margin: '0 0 0.2rem 0', textTransform: 'uppercase', color: '#000000' }}>
                         {owner?.restaurantName || 'QRESTRO'}
                       </h4>
                       <div style={{ fontSize: '0.75rem', color: '#333333' }}>TABLE BILL RECEIPT</div>

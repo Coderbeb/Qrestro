@@ -437,7 +437,7 @@ export const BrandedQRTent: React.FC<BrandedQRTentProps> = ({ restaurantName, ta
           {/* QR Code */}
           <div className="tent-qr-card">
             {qrCodeUrl ? (
-              <img src={qrCodeUrl} alt="QR Code" crossOrigin="anonymous" />
+              <img src={qrCodeUrl} alt="QR Code" />
             ) : (
               <div style={{ width: 180, height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0f0f0' }}>No QR</div>
             )}
