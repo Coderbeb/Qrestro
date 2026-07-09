@@ -108,8 +108,8 @@ export default function TablesPage() {
 
   /**
    * Capture the branded QR tent as a PNG and trigger a download.
-   * Works on both mobile and desktop by rendering the tent off-screen
-   * at full size, capturing with html-to-image, then creating a blob URL.
+   * On mobile: uses Web Share API (native share sheet → "Save Image").
+   * On desktop: uses a traditional anchor download.
    */
   const handleSaveQRImage = useCallback(async (table: Table) => {
     if (!table.qrCodeImageUrl) return;
@@ -148,14 +148,36 @@ export default function TablesPage() {
         backgroundColor: '#f7f3e8',
       });
 
-      // Convert data URL to blob for reliable mobile download
+      // Convert data URL to blob
       const res = await fetch(dataUrl);
       const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
+      const fileName = `QRestro-Table-${table.tableNumber}-QR.png`;
 
+      // Try Web Share API first (works on mobile — native share sheet)
+      const canShare = typeof navigator.share === 'function' && typeof navigator.canShare === 'function';
+      if (canShare) {
+        const file = new File([blob], fileName, { type: 'image/png' });
+        const shareData = { files: [file], title: `QRestro Table ${table.tableNumber} QR Code` };
+        if (navigator.canShare(shareData)) {
+          try {
+            await navigator.share(shareData);
+            showToast('QR image shared!');
+            return; // Share succeeded, skip anchor download
+          } catch (shareErr: unknown) {
+            // User cancelled the share sheet — that's fine, not an error
+            if (shareErr instanceof DOMException && shareErr.name === 'AbortError') {
+              return;
+            }
+            // Other share errors — fall through to anchor download
+          }
+        }
+      }
+
+      // Fallback: anchor download (works on desktop browsers)
+      const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = `QRestro-Table-${table.tableNumber}-QR.png`;
+      link.download = fileName;
       link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
